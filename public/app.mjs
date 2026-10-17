@@ -1,5 +1,5 @@
-import { COLORS, DIRECTIONS, STAGES, clone, createLevel, isAccessible, status, dispatch, solve, addBay } from './engine.mjs?v=3';
-import { parkingSVG, exitVector, carStyle, miniCar } from './renderer.mjs?v=3';
+import { COLORS, DIRECTIONS, STAGES, clone, createLevel, isAccessible, status, dispatch, solve, addBay } from './engine.mjs?v=4';
+import { parkingSVG, exitVector, carStyle, miniCar } from './renderer.mjs?v=4';
 const $ = id => document.getElementById(id);
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 let state = createLevel(0), history = [], busy = false, hintId = null, sound = false, audio;
@@ -9,8 +9,8 @@ try {
   if (Array.isArray(saved)) cleared = new Set(saved.filter(x => Number.isInteger(x) && x >= 0 && x < STAGES.length));
 } catch {}
 function announce(text, notice = false) { $('message').textContent = text; $('message').classList.toggle('notice', notice); }
-function riderArt(color, first) {
-  return '<div class="rider" style="' + carStyle(color) + '" role="img" aria-label="' + (first ? '先頭：' : '') + COLORS[color].name + 'の乗客"><span class="rider-body"></span><span class="rider-symbol">' + COLORS[color].symbol + '</span></div>';
+function riderArt(color) {
+  return '<div class="rider" style="' + carStyle(color) + '" role="img" aria-label="' + COLORS[color].name + 'の乗客"><span class="rider-body"></span><span class="rider-symbol">' + COLORS[color].symbol + '</span></div>';
 }
 function render() {
   const spec = STAGES[state.stage], current = status(state);
@@ -19,8 +19,8 @@ function render() {
   $('boarded').textContent = state.head;
   $('rider-total').textContent = '/ ' + state.queue.length;
   $('rider-total').parentElement.setAttribute('aria-label', state.queue.length + '人中' + state.head + '人が乗車');
-  const remaining = state.queue.slice(state.head);
-  $('queue').innerHTML = remaining.length ? remaining.slice(0, 26).map((color, i) => riderArt(color, i === 0)).join('') : '<span class="queue-done">みんな乗れました！</span>';
+  const remaining = state.waiting;
+  $('queue').innerHTML = remaining.length ? remaining.slice(0, 26).map(color => riderArt(color)).join('') : '<span class="queue-done">みんな乗れました！</span>';
   $('bay-count').textContent = '空き ' + state.bays.filter(id => !id).length + ' / ' + state.bays.length;
   $('bays').innerHTML = Array.from({ length: 7 }, (_, i) => {
     if (i >= state.bays.length) return '<button class="bay locked" data-expand aria-label="待機枠を1つ増やす（無料）"' + (busy || current === 'won' ? ' disabled' : '') + '><span class="plus" aria-hidden="true">＋</span><small>無料で追加</small></button>';
@@ -102,8 +102,7 @@ async function choose(id, keyboard = false) {
     render(); showResult(true); celebrate();
   } else if (status(state) === 'lost') showResult(false);
   else {
-    const next = COLORS[state.queue[state.head]];
-    announce('つぎは' + next.label + ' ' + next.symbol + ' の乗客。進路の空いた車を探そう。');
+    announce('同じ色なら、列のどこからでも乗れるよ！ 進路の空いた車を探そう。');
     if (keyboard) {
       const target = state.buses.find(b => isAccessible(state, b.id));
       if (target) document.querySelector('[data-bus="' + target.id + '"]')?.focus();
@@ -114,7 +113,7 @@ function closeDialogs() { for (const id of ['result-dialog', 'settings-dialog'])
 function start(index, variant = 0) {
   if (busy) return;
   closeDialogs(); state = createLevel(index, variant); history = []; hintId = null; render();
-  announce('矢印の先が空いている車をタップ！ 先頭の色も見てみよう。');
+  announce('矢印の先が空いている車をタップ！ 同じ色の乗客がどこからでも乗ります。');
 }
 function undo() {
   if (busy || !history.length) return;
@@ -148,7 +147,7 @@ function showResult(won) {
   $('result-icon').textContent = won ? '🏁' : '🚧';
   $('result-kicker').textContent = won ? 'ALL ABOARD!' : 'A LITTLE TRAFFIC JAM.';
   $('result-title').textContent = won ? last ? 'すべての駐車場をクリア！' : 'みんな、出発！' : 'のりばがいっぱい！';
-  $('result-text').textContent = won ? state.queue.length + '人全員が乗車しました。' + (last ? '好きなステージをシャッフルして、もう一度遊べます。' : 'つぎの駐車場にも挑戦してみよう。') : '先頭の乗客が乗れる車がいないみたい。出す順番を変えてみよう。';
+  $('result-text').textContent = won ? state.queue.length + '人全員が乗車しました。' + (last ? '好きなステージをシャッフルして、もう一度遊べます。' : 'つぎの駐車場にも挑戦してみよう。') : '車を出せなくなったみたい。1手戻して、進路を確かめてみよう。';
   $('result-primary').textContent = won ? last ? 'はじめから遊ぶ' : '次のステージへ' : '1手戻して続ける';
   $('result-secondary').textContent = won ? 'このステージをもう一度' : state.bays.length < 7 ? '待機枠を1つ増やして続ける' : 'このステージをやり直す';
   if (!$('result-dialog').open) $('result-dialog').showModal();

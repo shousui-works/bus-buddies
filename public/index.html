@@ -7,7 +7,7 @@
 <meta name="description" content="いろいろな向きに詰まった車をタップして、駐車場から脱出！同じ色の乗客を乗せて出発する、真上から見やすい駐車場パズル。">
 <title>BUS BUDDIES — ぎゅうぎゅう駐車場</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='10' y='9' width='44' height='45' rx='12' fill='%23428fff'/%3E%3Crect x='16' y='17' width='32' height='18' rx='4' fill='%23dff3ff'/%3E%3Ccircle cx='21' cy='46' r='4' fill='%23ffe983'/%3E%3Ccircle cx='43' cy='46' r='4' fill='%23ffe983'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="./style.css?v=3">
+<link rel="stylesheet" href="./style.css?v=4">
 </head>
 <body>
 <main class="page">
@@ -42,7 +42,7 @@
 <g fill="#75c35f" stroke="#51a851" stroke-width="2"><circle cx="8" cy="51" r="15"/><circle cx="473" cy="49" r="19"/></g><g fill="#9ad86b"><circle cx="3" cy="43" r="10"/><circle cx="479" cy="39" r="13"/></g>
 <path d="M0 94h480" stroke="#fff" stroke-width="2" stroke-dasharray="17 12"/><path d="M237 57v15m56-15v15" stroke="#8898a3" stroke-width="3"/>
 </svg>
-      <div class="passenger-strip"><span class="next-label">NEXT<span aria-hidden="true">▸</span></span><div class="passenger-window"><div id="queue" class="queue"></div></div></div>
+      <div class="passenger-strip"><span class="next-label">乗客</span><div class="passenger-window"><div id="queue" class="queue"></div></div></div>
     </div>
     <div class="boarding-zone">
       <div class="boarding-caption"><span><i></i> のりば</span><span id="bay-count">空き 5 / 5</span></div>
@@ -51,7 +51,7 @@
     <div class="road" aria-hidden="true"><span class="crosswalk"></span><span class="road-line"></span><span class="road-exit">GO! →</span></div>
     <div class="lot-heading"><h2>駐車場</h2><span id="car-count">のこり20台</span><button id="undo" disabled aria-label="1手戻す"><span aria-hidden="true">↶</span> 1手戻す</button></div>
     <div class="garage" id="garage"></div>
-    <div class="message" id="message" role="status">矢印の先が空いている車をタップ！</div>
+    <div class="message" id="message" role="status">同じ色なら、列のどこからでも乗れるよ！</div>
     <div class="boosts">
       <button class="boost-button" id="hint"><span class="boost-icon" aria-hidden="true">✦</span><strong>ヒント</strong><small>出す車を教えて</small></button>
       <button class="boost-button" id="shuffle"><span class="boost-icon shuffle-icon" aria-hidden="true">⇄</span><strong>シャッフル</strong><small>新しい配置に</small></button>
@@ -63,7 +63,7 @@
 <dialog id="help-dialog" class="modal">
   <button class="modal-x" id="help-close" aria-label="遊び方を閉じる">×</button>
   <span class="modal-illustration" aria-hidden="true">🚙</span><div class="modal-kicker">HOW TO PLAY</div><h2>出したい車の、<br>先を見よう。</h2>
-  <ol class="rules"><li><b>矢印の向きに脱出</b><span>車は矢印の方向へまっすぐ進みます。途中に別の車がいたら動けません。</span></li><li><b>同じ色の乗客が乗る</b><span>脱出した車は、上ののりばへ。乗客は列の先頭から自動で乗ります。</span></li><li><b>満員で出発！</b><span>小さな車は4人、長いバスは6人。待機枠が埋まって先頭の乗客が乗れなくなると失敗です。</span></li></ol>
+  <ol class="rules"><li><b>矢印の向きに脱出</b><span>車は矢印の方向へまっすぐ進みます。途中に別の車がいたら動けません。</span></li><li><b>同じ色の乗客が乗る</b><span>脱出した車は、上ののりばへ。列の途中や後ろにいても、同じ色なら自動で乗ります。乗らない人の順番はそのままです。</span></li><li><b>満員で出発！</b><span>小さな車は4人、長いバスは6人。満員になると自動で出発します。全員を乗せて、駐車場を空っぽにしよう！</span></li></ol>
   <p class="help-note">シャッフルは配置と乗客の列を入れ替えます。「1手戻す」で元に戻せます。待機枠は無料で2つ増やせます。</p>
   <button class="primary-button" id="help-play">やってみよう！</button>
 </dialog>
@@ -73,6 +73,6 @@
 <dialog id="result-dialog" class="modal result-modal">
   <span class="modal-illustration" id="result-icon" aria-hidden="true">🏁</span><div class="modal-kicker" id="result-kicker">ALL ABOARD!</div><h2 id="result-title">みんな、出発！</h2><p id="result-text"></p><button class="primary-button" id="result-primary">次のステージへ</button><button class="secondary-button" id="result-secondary">もう一度遊ぶ</button>
 </dialog>
-<script type="module" src="./app.mjs?v=3"></script>
+<script type="module" src="./app.mjs?v=4"></script>
 </body>
 </html>

@@ -4,9 +4,13 @@ import { COLORS, DIRECTIONS, STAGES, clone, createLevel, cellsFor, exitPath, get
 
 function conservation(state) {
   assert.equal(state.head, state.buses.reduce((n, b) => n + b.load, 0));
+  assert.equal(state.waiting.length + state.head, state.queue.length);
   assert.equal(state.queue.length, state.buses.reduce((n, b) => n + b.capacity, 0));
   for (const color of Object.keys(COLORS)) {
-    assert.equal(state.queue.filter(c => c === color).length, state.buses.filter(b => b.color === color).reduce((n, b) => n + b.capacity, 0));
+    const cars = state.buses.filter(b => b.color === color);
+    const total = state.queue.filter(c => c === color).length;
+    assert.equal(total, cars.reduce((n, b) => n + b.capacity, 0));
+    assert.equal(total, state.waiting.filter(c => c === color).length + cars.reduce((n, b) => n + b.load, 0));
   }
   const bays = state.bays.filter(Boolean);
   assert.equal(new Set(bays).size, bays.length);
@@ -38,7 +42,7 @@ function finish(state, route) {
   return state;
 }
 function fixture(buses, queue) {
-  return { stage: 0, variant: 0, size: 8, buses: buses.map(b => ({ load: 0, location: 'garage', capacity: 4, color: 'coral', ...b })), queue, head: 0, bays: [null, null, null, null, null], moves: 0, solution: buses.map(b => b.id) };
+  return { stage: 0, variant: 0, size: 8, buses: buses.map(b => ({ load: 0, location: 'garage', capacity: 4, color: 'coral', ...b })), queue, waiting: [...queue], head: 0, bays: [null, null, null, null, null], moves: 0, solution: buses.map(b => b.id) };
 }
 test('all five crowded parking lots are reproducible, nonoverlapping, colorful and solvable', () => {
   for (let stage = 0; stage < STAGES.length; stage++) {
@@ -90,18 +94,74 @@ test('cars travel only in their facing direction, even if the opposite end is cl
   assert.equal(moved.ok, true);
   assert.equal(isAccessible(moved.state, 'bus-0'), true);
 });
-test('full waiting bays cause failure, and a free extra bay can rescue the same position', () => {
-  const colors = ['blue', 'yellow', 'green', 'purple', 'orange', 'coral'];
+test('riders board from the middle of the queue while the others keep their order', () => {
+  const colors = ['blue', 'coral', 'green', 'yellow'];
   const cars = colors.map((color, y) => ({ id: 'bus-' + y, x: 0, y, dir: 'E', length: 2, color }));
-  const queue = ['coral', 'blue', 'yellow', 'green', 'purple', 'orange'].flatMap(c => Array(4).fill(c));
+  const queue = ['coral', 'blue', 'green', 'blue', 'coral', 'yellow', 'blue', 'green', 'yellow', 'coral', 'blue', 'green', 'yellow', 'coral', 'green', 'yellow'];
+  const initial = fixture(cars, queue), before = clone(initial);
+  const result = dispatch(initial, 'bus-0');
+  assert.equal(result.ok, true);
+  assert.deepEqual(initial, before, 'boarding does not change the undo snapshot');
+  assert.deepEqual(result.state.waiting, queue.filter(color => color !== 'blue'));
+  assert.deepEqual(result.state.queue, queue, 'the original roster is retained');
+  assert.equal(result.state.head, 4);
+  assert.equal(result.state.buses[0].location, 'departed');
+  assert.ok(result.state.bays.every(id => id === null));
+  let expected = [...queue];
+  for (const frame of result.events) {
+    if (frame.type === 'board') expected.splice(expected.indexOf('blue'), 1);
+    assert.deepEqual(frame.state.waiting, expected);
+    conservation(frame.state);
+  }
+  finish(result.state, ['bus-2', 'bus-3', 'bus-1']);
+});
+test('passengers beyond the visible strip can fill a six-seat bus', () => {
+  const cars = Array.from({ length: 8 }, (_, y) => ({ id: 'bus-' + y, x: 0, y, dir: 'E', length: y === 7 ? 3 : 2, capacity: y === 7 ? 6 : 4, color: y === 7 ? 'blue' : 'coral' }));
+  const queue = [...Array(28).fill('coral'), ...Array(6).fill('blue')];
+  const result = dispatch(fixture(cars, queue), 'bus-7');
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.state.waiting, Array(28).fill('coral'));
+  assert.equal(result.state.head, 6);
+  assert.equal(result.state.buses[7].load, 6);
+  assert.equal(result.state.buses[7].location, 'departed');
+  assert.equal(result.events.filter(frame => frame.type === 'board').length, 6);
+  conservation(result.state);
+});
+test('same-color vehicles board only up to their own capacities', () => {
+  const cars = [
+    { id: 'short', x: 0, y: 0, dir: 'E', length: 2, color: 'blue' },
+    { id: 'long', x: 0, y: 1, dir: 'E', length: 3, capacity: 6, color: 'blue' },
+    { id: 'red', x: 0, y: 2, dir: 'E', length: 2, color: 'coral' }
+  ];
+  const queue = ['coral', 'blue', 'blue', 'coral', 'blue', 'blue', 'coral', 'blue', 'blue', 'coral', 'blue', 'blue', 'blue', 'blue'];
   let state = fixture(cars, queue);
-  for (let i = 0; i < 5; i++) state = dispatch(state, 'bus-' + i).state;
-  conservation(state); assert.equal(status(state), 'lost'); assert.equal(solve(state).status, 'unsolvable');
-  const original = JSON.stringify(state);
-  const extra = addBay(state);
-  assert.equal(JSON.stringify(state), original); assert.equal(status(extra), 'playing');
-  const rescued = dispatch(extra, 'bus-5');
-  assert.equal(rescued.ok, true); conservation(rescued.state); assert.equal(status(rescued.state), 'won');
+  state = dispatch(state, 'short').state;
+  assert.equal(state.buses[0].load, 4);
+  assert.equal(state.waiting.filter(color => color === 'blue').length, 6);
+  conservation(state);
+  state = dispatch(state, 'long').state;
+  assert.equal(state.buses[1].load, 6);
+  assert.deepEqual(state.waiting, Array(4).fill('coral'));
+  conservation(state);
+  finish(state, ['red']);
+});
+test('all stages clear when choosing available cars without following queue order', () => {
+  for (let stage = 0; stage < STAGES.length; stage++) {
+    let state = createLevel(stage);
+    for (let move = 0; move < STAGES[stage].count; move++) {
+      const available = state.buses.filter(car => isAccessible(state, car.id));
+      assert.ok(available.length);
+      const car = available.find(car => car.color !== state.waiting[0]) || available[0];
+      const result = dispatch(state, car.id, false);
+      assert.equal(result.ok, true);
+      state = result.state;
+      assert.equal(state.buses.find(bus => bus.id === car.id).location, 'departed');
+      assert.ok(state.bays.every(id => id === null));
+      conservation(state);
+    }
+    assert.equal(status(state), 'won');
+    assert.deepEqual(state.waiting, []);
+  }
 });
 test('no more than two extra waiting bays can be added', () => {
   const initial = createLevel(0), six = addBay(initial), seven = addBay(six);

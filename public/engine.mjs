@@ -92,10 +92,10 @@ export function createLevel(index = 0, variant = 0) {
       counts[j] -= amount;
     }
   }
-  return { stage: index, variant, size: spec.size, buses, queue, head: 0, bays: [null, null, null, null, null], moves: 0, solution };
+  return { stage: index, variant, size: spec.size, buses, queue, waiting: [...queue], head: 0, bays: [null, null, null, null, null], moves: 0, solution };
 }
 export function status(state) {
-  if (state.head === state.queue.length && state.buses.every(b => b.location === 'departed')) return 'won';
+  if (state.waiting.length === 0 && state.buses.every(b => b.location === 'departed')) return 'won';
   if (state.bays.every(Boolean)) return 'lost';
   if (!state.buses.some(b => isAccessible(state, b.id))) return 'lost';
   return 'playing';
@@ -113,11 +113,16 @@ export function dispatch(original, id, recordFrames = true) {
   const selected = state.buses.find(b => b.id === id);
   selected.location = 'bay'; state.bays[bay] = id; state.moves++;
   record('move', id, bay);
-  while (state.head < state.queue.length) {
-    const color = state.queue[state.head];
-    const slot = state.bays.findIndex(busId => busId && state.buses.find(b => b.id === busId).color === color);
-    if (slot < 0) break;
+  const bayFor = color => state.bays.findIndex(busId => {
+    const bus = state.buses.find(b => b.id === busId);
+    return bus && bus.color === color && bus.load < bus.capacity;
+  });
+  while (state.waiting.length) {
+    const rider = state.waiting.findIndex(color => bayFor(color) >= 0);
+    if (rider < 0) break;
+    const slot = bayFor(state.waiting[rider]);
     const boarding = state.buses.find(b => b.id === state.bays[slot]);
+    state.waiting.splice(rider, 1);
     boarding.load++; state.head++;
     record('board', boarding.id, slot);
     if (boarding.load === boarding.capacity) {
@@ -147,11 +152,11 @@ export function solve(initial, maxNodes = 18000, timeBudgetMs = 500) {
     if (status(state) === 'lost') return null;
     if (++nodes > maxNodes || (nodes % 32 === 0 && Date.now() > deadline)) { limited = true; return null; }
     const signature = state.buses.filter(b => b.location === 'garage').map(b => b.id).join(',') + '/' +
-      state.bays.filter(Boolean).map(id => { const b = state.buses.find(x => x.id === id); return b.color + ':' + b.capacity + ':' + b.load; }).sort().join(',') + '/' + state.head;
+      state.bays.filter(Boolean).map(id => { const b = state.buses.find(x => x.id === id); return b.color + ':' + b.capacity + ':' + b.load; }).sort().join(',') + '/' + state.waiting.join(',');
     if (seen.has(signature)) return null;
     seen.add(signature);
     const candidates = state.buses.filter(b => isAccessible(state, b.id));
-    candidates.sort((a, b) => Number(b.color === state.queue[state.head]) - Number(a.color === state.queue[state.head]) || (state.solution || []).indexOf(a.id) - (state.solution || []).indexOf(b.id));
+    candidates.sort((a, b) => Number(b.color === state.waiting[0]) - Number(a.color === state.waiting[0]) || (state.solution || []).indexOf(a.id) - (state.solution || []).indexOf(b.id));
     for (const car of candidates) {
       if (limited) break;
       const move = dispatch(state, car.id, false);
