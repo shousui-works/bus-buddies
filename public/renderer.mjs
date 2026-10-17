@@ -1,4 +1,4 @@
-import { COLORS, DIRECTIONS, exitPath, isAccessible } from './engine.mjs?v=4';
+import { COLORS, DIRECTIONS, exitPath, isAccessible } from './engine.mjs?v=5';
 
 const VIEW_SIZE = 600;
 const PADDING = 20;

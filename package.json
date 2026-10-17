@@ -1,6 +1,6 @@
 {
   "name": "bus-buddies",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "private": true,
   "type": "module",
   "description": "真上視点で進路を見分ける、カラフルな駐車場パズルゲーム",

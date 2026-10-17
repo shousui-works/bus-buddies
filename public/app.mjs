@@ -1,5 +1,5 @@
-import { COLORS, DIRECTIONS, STAGES, clone, createLevel, isAccessible, status, dispatch, solve, addBay } from './engine.mjs?v=4';
-import { parkingSVG, exitVector, carStyle, miniCar } from './renderer.mjs?v=4';
+import { COLORS, DIRECTIONS, STAGES, clone, createLevel, isAccessible, status, dispatch, solve, addBay } from './engine.mjs?v=5';
+import { parkingSVG, exitVector, carStyle, miniCar } from './renderer.mjs?v=5';
 const $ = id => document.getElementById(id);
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 let state = createLevel(0), history = [], busy = false, hintId = null, sound = false, audio;
@@ -58,6 +58,94 @@ function tone(type) {
     oscillator.connect(gain); gain.connect(audio.destination); oscillator.start(); oscillator.stop(audio.currentTime + .13);
   } catch {}
 }
+// Keep the travelling rider outside the clipped queue and parking panels.
+function transientEffect(element, frames, options) {
+  $('boarding-effects').append(element);
+  element.animate(frames, options).finished.catch(() => {}).finally(() => element.remove());
+}
+async function animateRider(event) {
+  if (reduceMotion || !Element.prototype.animate) return null;
+  const car = event.state.buses.find(bus => bus.id === event.id);
+  const index = state.waiting.indexOf(car.color);
+  const riders = [...$('queue').children];
+  const positions = riders.map(rider => rider.getBoundingClientRect());
+  const source = riders[index];
+  const sourceRect = positions[index];
+  const strip = $('queue').parentElement.getBoundingClientRect();
+  const vehicle = $('bays').querySelector('[data-bay="' + event.bay + '"] .mini-car');
+  if (!vehicle || index < 0) return null;
+  const target = vehicle.getBoundingClientRect();
+  const startX = Math.max(strip.left, Math.min(sourceRect?.left ?? strip.right - 24, strip.right - 24));
+  const startY = sourceRect?.top ?? strip.bottom - 35;
+  const dx = target.right - 7 - startX;
+  const dy = target.top + target.height * .55 - 24 - startY;
+  const holder = document.createElement('div');
+  holder.innerHTML = riderArt(car.color);
+  const traveller = holder.firstElementChild;
+  traveller.classList.add('boarding-rider');
+  traveller.removeAttribute('role'); traveller.removeAttribute('aria-label');
+  traveller.style.left = startX + 'px'; traveller.style.top = startY + 'px';
+  const visibleSource = sourceRect && sourceRect.left >= strip.left && sourceRect.right < strip.right - 8;
+  const visibility = source?.style.visibility || '';
+  if (visibleSource) source.style.visibility = 'hidden';
+  $('boarding-effects').append(traveller);
+  const lean = dx < 0 ? -9 : 9;
+  try {
+    await traveller.animate([
+      { transform: 'translate(0,0) scale(1)', opacity: 1, offset: 0 },
+      { transform: 'translate(' + dx * .18 + 'px,' + (dy * .12 - 12) + 'px) rotate(' + lean + 'deg) scale(1.18)', opacity: 1, offset: .25 },
+      { transform: 'translate(' + dx * .8 + 'px,' + (dy * .65 - 9) + 'px) rotate(' + -lean + 'deg) scale(1.08)', opacity: 1, offset: .7 },
+      { transform: 'translate(' + dx + 'px,' + dy + 'px) scale(.3)', opacity: 0, offset: 1 }
+    ], { duration: 320, easing: 'ease-in-out', fill: 'forwards' }).finished;
+  } catch {} finally {
+    traveller.remove();
+    if (source?.isConnected) source.style.visibility = visibility;
+  }
+  return { index, positions };
+}
+function boardingFeedback(event, previous) {
+  if (!previous || reduceMotion) return;
+  // Close only the gap left by the boarding passenger; everyone else keeps their order.
+  [...$('queue').children].forEach((rider, index) => {
+    const old = previous.positions[index >= previous.index ? index + 1 : index];
+    if (!old) return;
+    const dx = old.left - rider.getBoundingClientRect().left;
+    if (dx) rider.animate([{ transform: 'translateX(' + dx + 'px)' }, { transform: 'translateX(0)' }], { duration: 160, easing: 'ease-out' });
+  });
+  const bay = $('bays').querySelector('[data-bay="' + event.bay + '"]');
+  const vehicle = bay?.querySelector('.mini-car');
+  if (!vehicle) return;
+  vehicle.animate([
+    { transform: 'translateY(0) scale(1)' },
+    { transform: 'translateY(2px) scale(1.14,.9)', offset: .35 },
+    { transform: 'translateY(-2px) scale(.96,1.07)', offset: .7 },
+    { transform: 'translateY(0) scale(1)' }
+  ], { duration: 210, easing: 'ease-out' });
+  $('boarded').animate([{ transform: 'scale(1)' }, { transform: 'scale(1.3)', color: '#ffe18a', offset: .4 }, { transform: 'scale(1)' }], { duration: 230 });
+  const car = event.state.buses.find(bus => bus.id === event.id);
+  const full = car.load === car.capacity;
+  const target = vehicle.getBoundingClientRect();
+  const centerX = target.left + target.width / 2, centerY = target.top + 6;
+  const badge = document.createElement('span');
+  badge.className = 'boarding-badge' + (full ? ' boarding-full' : '');
+  badge.style.cssText = carStyle(car.color) + ';left:' + centerX + 'px;top:' + centerY + 'px';
+  badge.textContent = full ? '満員！' : '+1';
+  transientEffect(badge, [
+    { transform: 'translate(-50%,0) scale(.6)', opacity: 0 },
+    { transform: 'translate(-50%,-15px) scale(1.12)', opacity: 1, offset: .3 },
+    { transform: 'translate(-50%,-25px) scale(1)', opacity: 0 }
+  ], { duration: full ? 650 : 430, easing: 'ease-out' });
+  if (full) for (let i = 0; i < 5; i++) {
+    const spark = document.createElement('span');
+    spark.className = 'boarding-spark'; spark.textContent = '✦';
+    spark.style.left = centerX + 'px'; spark.style.top = (target.top + 12) + 'px';
+    const angle = -Math.PI + i * Math.PI / 4;
+    transientEffect(spark, [
+      { transform: 'translate(-50%,-50%) scale(.3)', opacity: 1 },
+      { transform: 'translate(' + (Math.cos(angle) * 34 - 6) + 'px,' + (Math.sin(angle) * 30 - 6) + 'px) rotate(70deg) scale(1)', opacity: 0 }
+    ], { duration: 480, easing: 'ease-out' });
+  }
+}
 async function choose(id, keyboard = false) {
   if (busy) return;
   const result = dispatch(state, id);
@@ -81,6 +169,7 @@ async function choose(id, keyboard = false) {
     await selected.animate([{ transform: 'translate(0px,0px)' }, { transform: 'translate(' + vector.x + 'px,' + vector.y + 'px)' }], { duration: 370, fill: 'forwards', easing: 'cubic-bezier(.4,0,.6,1)' }).finished.catch(() => {});
   }
   for (const event of result.events) {
+    const boarding = event.type === 'board' ? await animateRider(event) : null;
     if (event.type === 'depart' && !reduceMotion) {
       const vehicle = $('bays').querySelector('[data-bay="' + event.bay + '"] .bay-vehicle');
       if (vehicle?.animate) await vehicle.animate([{ transform: 'translateY(0)' }, { transform: 'translateY(-70px)' }], { duration: 190, fill: 'forwards', easing: 'ease-in' }).finished.catch(() => {});
@@ -90,7 +179,11 @@ async function choose(id, keyboard = false) {
       $('bays').querySelector('[data-bay="' + event.bay + '"] .bay-vehicle')?.classList.add('arriving');
       await delay(180);
     }
-    if (event.type === 'board') { tone('board'); await delay(65); }
+    if (event.type === 'board') {
+      tone('board'); boardingFeedback(event, boarding);
+      const boarded = event.state.buses.find(bus => bus.id === event.id);
+      await delay(boarded.load === boarded.capacity ? 160 : 45);
+    }
     if (event.type === 'depart') {
       tone('depart'); announce(COLORS[state.buses.find(b => b.id === event.id).color].label + 'の車が満員で出発！'); await delay(100);
     }

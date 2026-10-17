@@ -150,3 +150,18 @@
  .boosts{gap:7px;padding:3px 10px 9px}.boost-button{min-height:55px}.boost-button strong{font-size:10px}.boost-button small{font-size:7px}
  .game-footer{font-size:7px;height:25px}.game-footer button{font-size:9px}
 }
+
+/* A rider leaves the queue, runs to the door, then hops aboard. */
+.boarding-effects{position:fixed;inset:0;z-index:20;pointer-events:none;overflow:hidden}
+.boarding-rider{position:absolute;transform-origin:50% 85%;filter:drop-shadow(0 2px 1px #253e5b45);will-change:transform,opacity}
+.boarding-rider:before{outline:1.5px solid #fff9}
+.boarding-rider .rider-body:before,.boarding-rider .rider-body:after{transform-origin:50% 0;animation:boarding-step .12s ease-in-out infinite alternate}
+.boarding-rider .rider-body:after{animation-delay:-.12s}
+.boarding-rider:after{content:"";position:absolute;left:-3px;top:14px;width:21px;height:5px;background:var(--paint);border-radius:4px;transform:rotate(-15deg)}
+.boarding-rider .rider-symbol{z-index:2}
+.boarding-badge{position:absolute;padding:3px 7px;border-radius:12px;background:var(--paint);color:#fff;border:1.5px solid #fff;font-size:12px;font-weight:900;line-height:1.2;white-space:nowrap;box-shadow:0 2px 5px #294b7430;will-change:transform,opacity}
+.boarding-full{background:#ffe38c;color:#745015;font-size:11px}
+.boarding-spark{position:absolute;color:#f4b92d;text-shadow:0 1px #fff;font-size:15px;line-height:1}
+.rider-progress strong{display:inline-block;transform-origin:50% 80%}
+@keyframes boarding-step{from{transform:rotate(-30deg)}to{transform:rotate(30deg)}}
+@media(prefers-reduced-motion:reduce){.boarding-effects{display:none}}
