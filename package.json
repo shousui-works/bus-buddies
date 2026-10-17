@@ -1,0 +1,15 @@
+{
+  "name": "bus-buddies",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "色と順番を考えるバスのパズルゲーム",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "start": "node scripts/serve.mjs",
+    "test": "node --test tests/engine.test.mjs"
+  }
+}

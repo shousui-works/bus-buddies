@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f6f5ef">
+<meta name="description" content="色と順番を考える、小さなバスのパズル。乗客と同じ色のバスを選んで、みんなを出発させよう。スマホでも遊べる5ステージ。">
+<title>BUS BUDDIES — バスっと、出発！</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='10' y='9' width='44' height='45' rx='12' fill='%2371b999'/%3E%3Crect x='16' y='17' width='32' height='18' rx='4' fill='%23e6f6ef'/%3E%3Ccircle cx='21' cy='46' r='4' fill='white'/%3E%3Ccircle cx='43' cy='46' r='4' fill='white'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div class="page">
+  <header class="header">
+    <a class="brand" href="./" aria-label="BUS BUDDIES ホーム">
+      <span class="brand-bus" aria-hidden="true"><i></i><b></b></span>
+      <span>BUS BUDDIES<small>バスっと、出発！</small></span>
+    </a>
+    <nav aria-label="ゲームメニュー">
+      <button class="small-button" id="sound" aria-pressed="false"><span aria-hidden="true">♫</span><span id="sound-label">音 OFF</span></button>
+      <button class="small-button" id="help"><span class="question" aria-hidden="true">?</span>遊び方</button>
+    </nav>
+  </header>
+  <main>
+    <div class="heading">
+      <div><div class="eyebrow"><span></span> A LITTLE PUZZLE, A HAPPY RIDE.</div><h1>つぎのバスは、<span>どの色？</span></h1><p>色をそろえて、みんなでお出かけ。</p></div>
+      <div class="day-stamp"><span aria-hidden="true">☀</span><div>のんびり、ひとやすみ。<small>時間制限はありません</small></div></div>
+    </div>
+    <div class="layout">
+      <section class="game" aria-label="バスのパズル">
+        <div class="game-top"><div><span class="stage-pill" id="stage-pill">STAGE 01</span><h2 id="stage-title">はじめての出発</h2></div><div class="progress-label"><strong id="boarded">0</strong><span id="rider-total"> / 18 人</span><small>乗車済み</small></div></div>
+        <div class="progress-track" role="progressbar" aria-label="乗客の乗車状況" aria-valuemin="0" aria-valuemax="18" aria-valuenow="0"><span id="progress"></span></div>
+        <div class="queue-area">
+          <div class="section-label"><h3><span aria-hidden="true">☷</span> 乗客の列</h3><span>先頭から順番に乗ります</span></div>
+          <div class="queue-wrap"><div class="queue" id="queue"></div></div>
+        </div>
+        <div class="bay-area"><div class="section-label"><h3>のりば</h3><span id="bay-count">待機中 0 / 3 台</span></div><div class="bays" id="bays"></div></div>
+        <div class="road"><span class="road-dash"></span><span class="exit-sign">← 満員になったら出発！</span><span class="road-dash"></span></div>
+        <div class="garage-area">
+          <div class="garage-title"><h3>バスの駐車場</h3><span>↑ 手前が空いているバスをタップ</span></div>
+          <div class="garage-landscape"><span class="tree tree-one" aria-hidden="true"></span><span class="tree tree-two" aria-hidden="true"></span><div class="garage" id="garage"></div></div>
+        </div>
+        <div class="message" role="status" id="message">先頭の乗客と同じ色のバスを出してみよう。</div>
+        <div class="controls"><button id="undo" class="control-button" disabled><span aria-hidden="true">↶</span>1手戻す</button><button id="hint" class="control-button hint-button"><span aria-hidden="true">✦</span>ヒント</button><button id="restart" class="control-button"><span aria-hidden="true">↻</span>やり直す</button></div>
+      </section>
+      <aside class="sidebar">
+        <section class="stage-card"><div class="card-kicker">TODAY'S LITTLE JOURNEY</div><h2>小さなバスの旅</h2><p>ひとつずつ、出発しよう。</p><div id="stages" class="stages"></div><div class="stage-footer"><span class="tiny-flower" aria-hidden="true">✿</span><span id="clear-count">クリアしたステージ 0 / 5</span></div></section>
+        <section class="tips-card"><span class="tips-icon" aria-hidden="true">✧</span><h2>出発のコツ</h2><p id="stage-note"></p><div class="legend"><span class="legend-person" aria-hidden="true">♟</span><span>同じ色・マークのバスに乗車</span></div><div class="legend"><span class="legend-three" aria-hidden="true">3</span><span>3人そろうと自動で出発</span></div></section>
+        <p class="side-caption">むずかしかったら、ひと休み。<br>バスはのんびり待っています。</p>
+      </aside>
+    </div>
+  </main>
+  <footer><span>MADE FOR A LITTLE BREAK.</span><span>すべての乗客に、すてきな旅を。</span></footer>
+</div>
+<dialog id="help-dialog" class="modal"><button class="modal-x" id="help-close" aria-label="遊び方を閉じる">×</button><span class="modal-icon" aria-hidden="true">🚌</span><span class="card-kicker">HOW TO PLAY</span><h2>バスっと、出発しよう。</h2><p>すべての乗客をバスに乗せたらクリア！</p><ol class="rules"><li><b>バスをタップ</b><span>前が空いているバスを、のりばへ移動。奥のバスは手前のバスを先に出してね。</span></li><li><b>同じ色の乗客が乗る</b><span>列の先頭から自動で乗車。色だけでなく、●・▲などのマークでも見分けられます。</span></li><li><b>3人乗ったら出発！</b><span>のりばは3台分。3枠とも埋まり、先頭の乗客が乗れなくなると失敗です。</span></li></ol><button class="primary-button" id="help-play">さあ、出発！ <span aria-hidden="true">→</span></button></dialog>
+<dialog id="result-dialog" class="modal result-modal"><span class="modal-icon" id="result-icon" aria-hidden="true">🎉</span><span class="card-kicker" id="result-kicker">NICE JOURNEY!</span><h2 id="result-title">みんな、いってらっしゃい！</h2><p id="result-text"></p><div class="result-buttons"><button class="primary-button" id="result-primary">次のステージへ →</button><button class="secondary-button" id="result-secondary">もう一度遊ぶ</button></div></dialog>
+<script type="module" src="./app.mjs"></script>
+</body>
+</html>
