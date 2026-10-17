@@ -9,10 +9,10 @@ export const COLORS = {
   pink: { name: 'ピンク', label: '桃', paint: '#f97bda', dark: '#bd459e', pale: '#ffe0f7', symbol: '♥' }
 };
 export const DIRECTIONS = {
-  N: { dx: 0, dy: -1, name: '右上', arrow: '↗' },
-  E: { dx: 1, dy: 0, name: '右下', arrow: '↘' },
-  S: { dx: 0, dy: 1, name: '左下', arrow: '↙' },
-  W: { dx: -1, dy: 0, name: '左上', arrow: '↖' }
+  N: { dx: 0, dy: -1, name: '上', arrow: '↑' },
+  E: { dx: 1, dy: 0, name: '右', arrow: '→' },
+  S: { dx: 0, dy: 1, name: '下', arrow: '↓' },
+  W: { dx: -1, dy: 0, name: '左', arrow: '←' }
 };
 export const STAGES = [
   { title: 'ぎゅうぎゅう駐車場', size: 8, count: 20, colors: 4, seed: 9321, group: 2 },

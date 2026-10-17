@@ -1,7 +1,7 @@
 # BUS BUDDIES — ぎゅうぎゅう駐車場
 
 いろいろな向きに詰まった車を、進路の空いた順に駐車場から出すブラウザ用パズルです。
-斜めから見下ろす立体的な車と、色別の乗客・のりばを組み合わせています。
+真上から見た、上下左右が分かる車と、色別の乗客・のりばを組み合わせています。
 
 [ブラウザで遊ぶ](https://shousui-works.github.io/bus-buddies/)
 
@@ -41,7 +41,7 @@ npm test
 - public/style.css — スマホ向けのゲーム画面とアニメーション
 - public/app.mjs — 操作、脱出・乗車アニメーション、音、保存
 - public/engine.mjs — 4方向の進路判定、配置生成、乗車処理、解法探索
-- public/renderer.mjs — 元の図形から描く立体的な車と駐車場のSVG
+- public/renderer.mjs — 元の図形から描く真上視点の車と駐車場のSVG
 - tests/engine.test.mjs — 交差する進路、配置とシャッフルの解法、乗客数、定員、失敗と救済のテスト
 - scripts/serve.mjs — ローカル開発用サーバー
 

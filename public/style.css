@@ -29,3 +29,124 @@
 @media(max-width:500px){body{background:#e7edf5}.page{padding:0;display:block;min-height:100svh}.play-shell{width:100%;max-width:480px;margin:auto;border:0;border-radius:0;box-shadow:none}.hud{height:60px;padding:0 13px;gap:10px}.round-button{width:36px;height:37px}.help-button{width:29px;height:30px}.terminal{height:106px}.boarding-zone{padding:4px 13px 8px}.bays{gap:5px;height:62px;padding:0 3px}.bay{height:58px}.boosts{padding:3px 16px 13px;gap:11px}.boost-button{min-height:67px}.lot-heading{padding-left:17px;padding-right:17px;height:30px}.garage{padding:0 5px}.message{height:39px;font-size:9px}.game-footer{height:29px}.modal h2{font-size:22px}}
 @media(max-width:360px){.hud{gap:7px;padding-left:9px;padding-right:9px;height:54px}.round-button{width:32px;height:33px;font-size:21px}.help-button{width:25px;height:26px;font-size:17px}.level-display>span{font-size:15px}.level-display>small{font-size:7px}.rider-progress{padding:4px 6px}.rider-progress strong{font-size:11px}.rider-progress small{font-size:8px}.terminal{height:91px}.boarding-zone{padding:3px 10px 7px}.bays{gap:4px;height:58px}.bay{height:54px;border-radius:6px}.bay-number{left:4px;top:4px;font-size:6px}.bay-vehicle{transform:skewX(10deg) scale(.91);margin-top:-7px}.bay-load{font-size:6px}.bay.locked small{font-size:5px}.lot-heading{height:27px;padding-left:13px;padding-right:13px}.boosts{gap:9px;padding:3px 13px 12px}.boost-button{min-height:61px;border-radius:9px}.boost-button strong{font-size:9px}.boost-button small{font-size:5px}.boost-icon{font-size:21px;height:24px}.message{font-size:8px;height:35px;margin-left:10px;margin-right:10px}.game-footer{font-size:6px;height:25px;padding:0 12px}.passenger-strip{left:12px;right:10px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}.confetti{display:none}}
+
+/* Orthographic view: show each car and its lane without perspective overlap. */
+.play-shell{width:460px;background:#eef3f9}
+.hud{background:#294b74;box-shadow:none;gap:11px;height:57px}
+.round-button{width:39px;height:39px;border-color:#8fa9c7;border-radius:10px;box-shadow:none;background:#203d60}
+.help-button{width:31px;height:31px}
+.level-display>span{font-size:18px}
+.level-display>small{font-size:10px;color:#e0eafa}
+.rider-progress{font-size:12px;padding:6px 9px;border-radius:10px;gap:4px}
+.rider-progress>span{font-size:10px;color:#e0eafa}
+.rider-progress strong{font-size:15px}
+.rider-progress small{font-size:10px;color:#d3deec}
+.terminal{height:87px;background:#d9e7f2}
+.town-scene{height:59px;opacity:.8}
+.passenger-strip{height:41px;bottom:3px;left:12px;right:12px;gap:8px;background:#f5f9fddd;border-radius:8px;padding:3px 7px}
+.next-label{font-size:9px;letter-spacing:.3px;padding:5px;border:0;box-shadow:none;background:#e0eaf7;color:#294b74;margin-bottom:5px}
+.passenger-window{height:39px}
+.queue{height:34px;gap:7px}
+.rider{width:15px;height:32px}
+.rider:before{width:11px;height:11px;left:2px}
+.rider-body{top:12px;left:1px;width:14px;height:12px;border-radius:5px 5px 2px 2px}
+.rider-body:before,.rider-body:after{top:11px;width:4px;height:8px}
+.rider-symbol{font-size:6px;top:14px}
+.boarding-zone{background:#d5e0ed;padding:5px 13px 8px;border-top:1px solid #c2d1e3}
+.boarding-caption{font-size:10px;height:21px;color:#526b8a;padding-bottom:6px}
+.boarding-caption i{background:#4d80b7}
+.bays{height:62px;gap:6px;padding:0}
+.bay{height:59px;transform:none;border:1.5px solid #f8fbff;border-radius:8px;background:#6e86a2;box-shadow:none}
+.bay-number{font-size:8px;color:#edf4fd;top:5px;left:5px}
+.bay.occupied{border-color:#8ba8c8}
+.bay-vehicle,.bay.locked .plus,.bay.locked small,.bay-load{transform:none}
+.bay.locked{background:#e9f0f8;border:1.5px dashed #91a6bf;box-shadow:none;color:#657e9f}
+.bay.locked small{font-size:7px}
+.bay-load{font-size:8px;bottom:3px;color:#243d5d}
+.mini-car{box-shadow:0 2px 0 var(--dark);width:24px;height:40px}
+.mini-roof{height:10px}
+.road{height:13px;border-bottom-color:#eef3f9}
+.road-exit{font-size:7px}
+.crosswalk{height:8px}
+.lot-heading{height:37px;padding:0 15px;gap:9px;background:#eef3f9}
+.lot-heading h2{font-size:12px;color:#354f71}
+.lot-heading>span{font-size:10px;color:#677e9c}
+.lot-heading>button{font-size:10px;min-height:33px;color:#526e94}
+.lot-heading>button>span{font-size:17px}
+.garage{background:#eef3f9;padding:0 10px}
+.vehicle{transition:filter .12s}
+.vehicle:hover{filter:brightness(1.06)}
+.vehicle:focus{filter:none}
+.vehicle:focus .vehicle-outline{stroke:#244c9a;stroke-width:5px}
+.hinted{filter:none}
+.vehicle.blocked-feedback{filter:none}
+.vehicle.blocked-feedback .vehicle-outline{stroke:#cf3b53;stroke-width:5px}
+.message{height:39px;font-size:11px;margin:0 14px;color:#465e7e}
+.message.notice{color:#ad4f37}
+.boosts{gap:9px;padding:3px 13px 10px}
+.boost-button,.vip-button{background:#e1ecfb;box-shadow:0 2px 0 #c6d5e9;border:1px solid #b3c9e5;color:#244e88;border-radius:11px;text-shadow:none;min-height:58px;padding:5px}
+.boost-button:hover:not(:disabled){background:#d6e6fc;filter:none}
+.boost-button:active:not(:disabled){transform:translateY(1px);box-shadow:0 1px 0 #c6d5e9}
+.boost-icon{font-size:21px;color:#3e70b8;height:23px}
+.shuffle-icon{font-size:26px;color:#3e70b8}
+.boost-button strong{font-size:12px}
+.boost-button small{font-size:8px;color:#5c769b}
+.game-footer{height:28px;font-size:8px;color:#687e9d}
+.game-footer button{font-size:10px;color:#4c6c99}
+.footer-mark{color:#90a9c8}
+@keyframes arrive{from{opacity:0;transform:translateY(12px) scale(.8)}to{opacity:1;transform:translateY(0) scale(1)}}
+@media(min-width:901px) and (max-height:850px){
+ .page{padding-top:12px;padding-bottom:12px}
+ .play-shell{width:350px}
+ .hud{height:52px;gap:8px;padding:0 9px}
+ .level-display>span{font-size:15px}
+ .level-display>small{font-size:8px}
+ .rider-progress{padding:5px 6px}
+ .rider-progress>span{font-size:9px}
+ .rider-progress strong{font-size:13px}
+ .rider-progress small{font-size:9px}
+ .round-button{width:32px;height:33px}.help-button{width:27px;height:28px}
+ .terminal{height:77px}
+ .bays{height:56px}.bay{height:54px}
+ .mini-car{height:36px;width:22px}
+ .bay-vehicle{margin-top:-7px}
+ .mini-roof{top:17px;height:10px}
+ .lot-heading{height:32px}
+ .message{height:37px;font-size:10px}
+ .boost-button{min-height:54px}
+}
+@media(max-width:900px){.play-shell{width:440px}}
+@media(max-width:500px){
+ .play-shell{width:100%}
+ .hud{height:57px;gap:9px;padding:0 10px}
+ .terminal{height:82px}
+ .boarding-zone{padding:5px 12px 7px}
+ .bays{height:61px;gap:5px}
+ .bay{height:58px}
+ .lot-heading{height:36px;padding-left:14px;padding-right:14px}
+ .garage{padding:0 9px}
+ .boosts{padding:3px 13px 10px;gap:8px}
+ .boost-button{min-height:58px}
+ .message{height:40px;font-size:10px}
+ .game-footer{height:27px}
+}
+@media(max-width:360px){
+ .hud{height:53px;gap:6px;padding:0 8px}
+ .round-button{width:32px;height:34px}.help-button{width:27px;height:28px}
+ .level-display>span{font-size:15px}.level-display>small{font-size:8px}
+ .rider-progress{padding:5px;gap:3px}.rider-progress strong{font-size:12px}.rider-progress small{font-size:9px}.rider-progress>span{font-size:8px}
+ .terminal{height:77px}
+ .boarding-zone{padding:4px 10px 6px}
+ .bays{gap:4px;height:56px}.bay{height:54px}
+ .bay-number{font-size:7px;left:4px;top:4px}
+ .bay-vehicle{transform:scale(.91)}
+ .bay-load{font-size:7px}
+ .bay.locked small{font-size:6px}
+ .boarding-caption{font-size:9px}
+ .lot-heading{height:32px;padding-left:11px;padding-right:11px}
+ .lot-heading h2{font-size:11px}.lot-heading>span{font-size:9px}
+ .garage{padding:0 7px}
+ .message{font-size:9px;height:37px}
+ .boosts{gap:7px;padding:3px 10px 9px}.boost-button{min-height:55px}.boost-button strong{font-size:10px}.boost-button small{font-size:7px}
+ .game-footer{font-size:7px;height:25px}.game-footer button{font-size:9px}
+}

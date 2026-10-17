@@ -1,5 +1,5 @@
-import { COLORS, DIRECTIONS, STAGES, clone, createLevel, isAccessible, status, dispatch, solve, addBay } from './engine.mjs?v=2';
-import { parkingSVG, exitVector, carStyle, miniCar } from './renderer.mjs?v=2';
+import { COLORS, DIRECTIONS, STAGES, clone, createLevel, isAccessible, status, dispatch, solve, addBay } from './engine.mjs?v=3';
+import { parkingSVG, exitVector, carStyle, miniCar } from './renderer.mjs?v=3';
 const $ = id => document.getElementById(id);
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 let state = createLevel(0), history = [], busy = false, hintId = null, sound = false, audio;
@@ -83,7 +83,7 @@ async function choose(id, keyboard = false) {
   for (const event of result.events) {
     if (event.type === 'depart' && !reduceMotion) {
       const vehicle = $('bays').querySelector('[data-bay="' + event.bay + '"] .bay-vehicle');
-      if (vehicle?.animate) await vehicle.animate([{ transform: 'skewX(10deg) translateY(0)' }, { transform: 'skewX(10deg) translateY(-70px)' }], { duration: 190, fill: 'forwards', easing: 'ease-in' }).finished.catch(() => {});
+      if (vehicle?.animate) await vehicle.animate([{ transform: 'translateY(0)' }, { transform: 'translateY(-70px)' }], { duration: 190, fill: 'forwards', easing: 'ease-in' }).finished.catch(() => {});
     }
     state = event.state; render();
     if (event.type === 'move') {
