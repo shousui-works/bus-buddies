@@ -64,3 +64,11 @@ test('animation snapshots describe real partial boarding and departure', () => {
   for (const id of state.solution.slice(1)) state = dispatch(state, id).state;
   assert.equal(status(state), 'won');
 });
+
+test('each stage includes its full color palette and meaningful choices at the front', () => {
+  for (let level = 0; level < STAGES.length; level++) {
+    const state = createLevel(level);
+    assert.equal(new Set(state.buses.map(b => b.color)).size, STAGES[level].colors);
+    assert.ok(new Set(state.buses.filter(b => isAccessible(state, b.id)).map(b => b.color)).size >= 2);
+  }
+});

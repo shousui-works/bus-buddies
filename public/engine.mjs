@@ -19,9 +19,14 @@ function random(seed) {
 export function createLevel(index = 0) {
   if (!Number.isInteger(index) || index < 0 || index >= STAGES.length) throw new RangeError('Unknown stage');
   const spec = STAGES[index], rng = random(spec.seed), palette = Object.keys(COLORS).slice(0, spec.colors);
+  const paints = Array.from({ length: spec.cols * spec.rows }, (_, i) => palette[i % palette.length]);
+  for (let i = paints.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [paints[i], paints[j]] = [paints[j], paints[i]];
+  }
   const buses = [];
   for (let row = 0; row < spec.rows; row++) for (let col = 0; col < spec.cols; col++) {
-    buses.push({ id: 'bus-' + (row * spec.cols + col), color: palette[Math.floor(rng() * palette.length)], row, col, load: 0, location: 'garage' });
+    buses.push({ id: 'bus-' + (row * spec.cols + col), color: paints[row * spec.cols + col], row, col, load: 0, location: 'garage' });
   }
   const laneRows = Array(spec.cols).fill(0), solution = [];
   while (solution.length < buses.length) {
