@@ -165,3 +165,9 @@
 .rider-progress strong{display:inline-block;transform-origin:50% 80%}
 @keyframes boarding-step{from{transform:rotate(-30deg)}to{transform:rotate(30deg)}}
 @media(prefers-reduced-motion:reduce){.boarding-effects{display:none}}
+
+/* Each vehicle keeps its own animation while the parking lot stays interactive. */
+.exiting-car{position:absolute;overflow:hidden;pointer-events:none}
+.bay.incoming .bay-vehicle{visibility:hidden}
+.bay.incoming{border-style:dashed}
+.bay.incoming .bay-load{font-size:7px}

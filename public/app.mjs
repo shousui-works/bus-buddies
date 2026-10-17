@@ -1,8 +1,11 @@
-import { COLORS, DIRECTIONS, STAGES, clone, createLevel, isAccessible, status, dispatch, solve, addBay } from './engine.mjs?v=5';
-import { parkingSVG, exitVector, carStyle, miniCar } from './renderer.mjs?v=5';
+import { COLORS, DIRECTIONS, STAGES, clone, createLevel, isAccessible, status, dispatch, solve, addBay } from './engine.mjs?v=6';
+import { GameSession } from './session.mjs?v=6';
+import { parkingSVG, exitVector, carStyle, miniCar } from './renderer.mjs?v=6';
 const $ = id => document.getElementById(id);
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-let state = createLevel(0), history = [], busy = false, hintId = null, sound = false, audio;
+let game = new GameSession(createLevel(0)), state = game.state, history = [], hintId = null, sound = false, audio;
+let parkingKey = '';
+const queueAnimations = new WeakMap();
 let cleared = new Set();
 try {
   const saved = JSON.parse(localStorage.getItem('bus-buddies-jam-cleared-v2') || '[]');
@@ -12,37 +15,87 @@ function announce(text, notice = false) { $('message').textContent = text; $('me
 function riderArt(color) {
   return '<div class="rider" style="' + carStyle(color) + '" role="img" aria-label="' + COLORS[color].name + 'の乗客"><span class="rider-body"></span><span class="rider-symbol">' + COLORS[color].symbol + '</span></div>';
 }
+function renderQueue() {
+  const queue = $('queue');
+  const old = new Map([...queue.querySelectorAll('[data-rider]')].map(rider => [Number(rider.dataset.rider), { element: rider, rect: rider.getBoundingClientRect() }]));
+  for (const { element } of old.values()) queueAnimations.get(element)?.cancel();
+  const visible = game.waiting.slice(0, 26);
+  const wanted = new Set(visible.map(rider => rider.id));
+  for (const child of [...queue.children]) if (!wanted.has(Number(child.dataset.rider)) || !child.hasAttribute('data-rider')) child.remove();
+  const flying = new Set([...game.trips.values()].map(trip => trip.flyingRider));
+  visible.forEach((rider, index) => {
+    let element = old.get(rider.id)?.element;
+    if (!element) {
+      const holder = document.createElement('div'); holder.innerHTML = riderArt(rider.color);
+      element = holder.firstElementChild; element.dataset.rider = rider.id;
+    }
+    if (queue.children[index] !== element) queue.insertBefore(element, queue.children[index] || null);
+    element.style.visibility = flying.has(rider.id) ? 'hidden' : '';
+  });
+  if (!visible.length) queue.innerHTML = '<span class="queue-done">みんな乗れました！</span>';
+  if (!reduceMotion && Element.prototype.animate) for (const element of queue.querySelectorAll('[data-rider]')) {
+    const previous = old.get(Number(element.dataset.rider));
+    if (!previous || element.style.visibility === 'hidden') continue;
+    const dx = previous.rect.left - element.getBoundingClientRect().left;
+    if (Math.abs(dx) > .5) queueAnimations.set(element, element.animate([{ transform: 'translateX(' + dx + 'px)' }, { transform: 'translateX(0)' }], { duration: 160, easing: 'ease-out' }));
+  }
+}
+function renderBays() {
+  const bays = $('bays');
+  const current = status(state);
+  for (let index = 0; index < 7; index++) {
+    const trip = [...game.trips.values()].find(trip => trip.bay === index);
+    const car = trip ? { ...trip.car, load: trip.load } : state.buses.find(bus => bus.id === state.bays[index]);
+    const locked = index >= state.bays.length;
+    const key = locked ? 'locked' : car ? car.id : 'empty';
+    let bay = bays.children[index];
+    if (!bay || bay.dataset.key !== key) {
+      const holder = document.createElement('div');
+      if (locked) holder.innerHTML = '<button class="bay locked" data-expand aria-label="待機枠を1つ増やす（無料）"><span class="plus" aria-hidden="true">＋</span><small>無料で追加</small></button>';
+      else if (!car) holder.innerHTML = '<div class="bay empty"><span class="bay-number">0' + (index + 1) + '</span></div>';
+      else holder.innerHTML = '<div class="bay occupied" style="' + carStyle(car.color) + '"><span class="bay-number">0' + (index + 1) + '</span><span class="bay-vehicle">' + miniCar(car) + '</span><span class="bay-load"></span></div>';
+      const next = holder.firstElementChild; next.dataset.key = key; next.dataset.bay = index;
+      if (bay) bay.replaceWith(next); else bays.append(next);
+      bay = next;
+    }
+    if (locked) { bay.disabled = current === 'won'; continue; }
+    const incoming = trip?.phase === 'exiting';
+    bay.classList.toggle('incoming', !!incoming);
+    bay.dataset.phase = trip?.phase || 'idle';
+    bay.setAttribute('aria-label', 'のりば' + (index + 1) + (car ? ' ' + COLORS[car.color].name + 'の車 ' + (incoming ? '移動中' : car.load + '人 / 定員' + car.capacity + '人') : ' 空き'));
+    if (car) bay.querySelector('.bay-load').textContent = incoming ? '移動中' : car.load + ' / ' + car.capacity;
+  }
+  const occupied = new Set([...state.bays.map((id, index) => id ? index : -1).filter(index => index >= 0), ...[...game.trips.values()].map(trip => trip.bay)]);
+  $('bay-count').textContent = '空き ' + (state.bays.length - occupied.size) + ' / ' + state.bays.length;
+}
 function render() {
-  const spec = STAGES[state.stage], current = status(state);
+  const spec = STAGES[state.stage], current = status(state), active = game.active;
   $('level-label').textContent = 'LEVEL ' + String(state.stage + 1).padStart(2, '0');
   $('stage-title').textContent = spec.title;
-  $('boarded').textContent = state.head;
+  $('boarded').textContent = game.boarded;
   $('rider-total').textContent = '/ ' + state.queue.length;
-  $('rider-total').parentElement.setAttribute('aria-label', state.queue.length + '人中' + state.head + '人が乗車');
-  const remaining = state.waiting;
-  $('queue').innerHTML = remaining.length ? remaining.slice(0, 26).map(color => riderArt(color)).join('') : '<span class="queue-done">みんな乗れました！</span>';
-  $('bay-count').textContent = '空き ' + state.bays.filter(id => !id).length + ' / ' + state.bays.length;
-  $('bays').innerHTML = Array.from({ length: 7 }, (_, i) => {
-    if (i >= state.bays.length) return '<button class="bay locked" data-expand aria-label="待機枠を1つ増やす（無料）"' + (busy || current === 'won' ? ' disabled' : '') + '><span class="plus" aria-hidden="true">＋</span><small>無料で追加</small></button>';
-    const id = state.bays[i], car = state.buses.find(b => b.id === id);
-    if (!car) return '<div class="bay empty" data-bay="' + i + '" aria-label="のりば' + (i + 1) + ' 空き"><span class="bay-number">0' + (i + 1) + '</span></div>';
-    return '<div class="bay occupied" data-bay="' + i + '" style="' + carStyle(car.color) + '" aria-label="のりば' + (i + 1) + ' ' + COLORS[car.color].name + 'の車 ' + car.load + '人 / 定員' + car.capacity + '人"><span class="bay-number">0' + (i + 1) + '</span><span class="bay-vehicle">' + miniCar(car) + '</span><span class="bay-load">' + car.load + ' / ' + car.capacity + '</span></div>';
-  }).join('');
-  $('car-count').textContent = 'のこり' + state.buses.filter(b => b.location === 'garage').length + '台';
-  $('garage').innerHTML = parkingSVG(state, hintId, busy);
-  if (busy) $('garage').setAttribute('aria-busy', 'true'); else $('garage').removeAttribute('aria-busy');
-  $('stages').innerHTML = STAGES.map((stage, i) => '<button class="stage-choice' + (i === state.stage ? ' active' : '') + '" data-stage="' + i + '" aria-label="ステージ' + (i + 1) + ' ' + stage.title + '"' + (busy ? ' disabled' : '') + '><span class="stage-number">' + (i + 1) + '</span><span>' + stage.title + '<br><small>' + stage.count + '台 / ' + stage.colors + '色</small></span><span class="stage-tick" aria-hidden="true">' + (cleared.has(i) ? '✓' : '') + '</span></button>').join('');
-  $('desktop-stages').innerHTML = STAGES.map((stage, i) => '<button class="desktop-stage' + (i === state.stage ? ' active' : '') + (cleared.has(i) ? ' cleared' : '') + '" data-stage="' + i + '" aria-label="ステージ' + (i + 1) + ' ' + stage.title + '" aria-current="' + (i === state.stage ? 'step' : 'false') + '"' + (busy ? ' disabled' : '') + '>' + (i + 1) + '</button>').join('');
+  $('rider-total').parentElement.setAttribute('aria-label', state.queue.length + '人中' + game.boarded + '人が乗車');
+  renderQueue(); renderBays();
+  $('car-count').textContent = 'のこり' + state.buses.filter(bus => bus.location === 'garage').length + '台';
+  const full = game.freeBay < 0;
+  const nextKey = [state.stage, state.variant, hintId, full, state.buses.filter(bus => bus.location === 'garage').map(bus => bus.id).join(',')].join('/');
+  if (parkingKey !== nextKey) {
+    $('garage').innerHTML = parkingSVG(state, hintId, full);
+    parkingKey = nextKey;
+  }
+  $('garage').dataset.activeTrips = game.trips.size;
+  $('stages').innerHTML = STAGES.map((stage, i) => '<button class="stage-choice' + (i === state.stage ? ' active' : '') + '" data-stage="' + i + '" aria-label="ステージ' + (i + 1) + ' ' + stage.title + '"' + (active ? ' disabled' : '') + '><span class="stage-number">' + (i + 1) + '</span><span>' + stage.title + '<br><small>' + stage.count + '台 / ' + stage.colors + '色</small></span><span class="stage-tick" aria-hidden="true">' + (cleared.has(i) ? '✓' : '') + '</span></button>').join('');
+  $('desktop-stages').innerHTML = STAGES.map((stage, i) => '<button class="desktop-stage' + (i === state.stage ? ' active' : '') + (cleared.has(i) ? ' cleared' : '') + '" data-stage="' + i + '" aria-label="ステージ' + (i + 1) + ' ' + stage.title + '" aria-current="' + (i === state.stage ? 'step' : 'false') + '"' + (active ? ' disabled' : '') + '>' + (i + 1) + '</button>').join('');
   $('clear-count').textContent = 'クリア ' + cleared.size + ' / ' + STAGES.length;
-  $('undo').disabled = busy || !history.length;
-  $('hint').disabled = busy || current !== 'playing';
-  $('shuffle').disabled = busy;
-  $('expand').disabled = busy || state.bays.length >= 7 || current === 'won';
+  $('undo').disabled = active || !history.length;
+  $('hint').disabled = current !== 'playing';
+  $('shuffle').disabled = active;
+  $('expand').disabled = state.bays.length >= 7 || current === 'won';
   $('expand-note').textContent = state.bays.length < 7 ? 'あと' + (7 - state.bays.length) + '枠増やせる' : '7枠すべて使用中';
-  $('restart').disabled = busy;
-  $('settings').disabled = busy;
-  $('help').disabled = busy;
-  $('level-menu').disabled = busy;
+  $('restart').disabled = active;
+  $('settings').disabled = active;
+  $('help').disabled = false;
+  $('level-menu').disabled = active;
 }
 const delay = ms => new Promise(resolve => setTimeout(resolve, reduceMotion ? 0 : ms));
 function tone(type) {
@@ -63,17 +116,15 @@ function transientEffect(element, frames, options) {
   $('boarding-effects').append(element);
   element.animate(frames, options).finished.catch(() => {}).finally(() => element.remove());
 }
-async function animateRider(event) {
+async function animateRider(trip, rider) {
   if (reduceMotion || !Element.prototype.animate) return null;
-  const car = event.state.buses.find(bus => bus.id === event.id);
-  const index = state.waiting.indexOf(car.color);
-  const riders = [...$('queue').children];
-  const positions = riders.map(rider => rider.getBoundingClientRect());
-  const source = riders[index];
-  const sourceRect = positions[index];
+  const car = trip.car;
+  const source = $('queue').querySelector('[data-rider="' + rider.id + '"]');
+  const sourceRect = source?.getBoundingClientRect();
   const strip = $('queue').parentElement.getBoundingClientRect();
-  const vehicle = $('bays').querySelector('[data-bay="' + event.bay + '"] .mini-car');
-  if (!vehicle || index < 0) return null;
+  const vehicle = $('bays').querySelector('[data-bay="' + trip.bay + '"] .mini-car');
+  if (!vehicle) return false;
+  trip.flyingRider = rider.id;
   const target = vehicle.getBoundingClientRect();
   const startX = Math.max(strip.left, Math.min(sourceRect?.left ?? strip.right - 24, strip.right - 24));
   const startY = sourceRect?.top ?? strip.bottom - 35;
@@ -85,7 +136,7 @@ async function animateRider(event) {
   traveller.classList.add('boarding-rider');
   traveller.removeAttribute('role'); traveller.removeAttribute('aria-label');
   traveller.style.left = startX + 'px'; traveller.style.top = startY + 'px';
-  const visibleSource = sourceRect && sourceRect.left >= strip.left && sourceRect.right < strip.right - 8;
+  const visibleSource = !!source;
   const visibility = source?.style.visibility || '';
   if (visibleSource) source.style.visibility = 'hidden';
   $('boarding-effects').append(traveller);
@@ -99,20 +150,14 @@ async function animateRider(event) {
     ], { duration: 320, easing: 'ease-in-out', fill: 'forwards' }).finished;
   } catch {} finally {
     traveller.remove();
+    trip.flyingRider = null;
     if (source?.isConnected) source.style.visibility = visibility;
   }
-  return { index, positions };
+  return true;
 }
-function boardingFeedback(event, previous) {
-  if (!previous || reduceMotion) return;
-  // Close only the gap left by the boarding passenger; everyone else keeps their order.
-  [...$('queue').children].forEach((rider, index) => {
-    const old = previous.positions[index >= previous.index ? index + 1 : index];
-    if (!old) return;
-    const dx = old.left - rider.getBoundingClientRect().left;
-    if (dx) rider.animate([{ transform: 'translateX(' + dx + 'px)' }, { transform: 'translateX(0)' }], { duration: 160, easing: 'ease-out' });
-  });
-  const bay = $('bays').querySelector('[data-bay="' + event.bay + '"]');
+function boardingFeedback(trip) {
+  if (reduceMotion || !Element.prototype.animate) return;
+  const bay = $('bays').querySelector('[data-bay="' + trip.bay + '"]');
   const vehicle = bay?.querySelector('.mini-car');
   if (!vehicle) return;
   vehicle.animate([
@@ -122,8 +167,8 @@ function boardingFeedback(event, previous) {
     { transform: 'translateY(0) scale(1)' }
   ], { duration: 210, easing: 'ease-out' });
   $('boarded').animate([{ transform: 'scale(1)' }, { transform: 'scale(1.3)', color: '#ffe18a', offset: .4 }, { transform: 'scale(1)' }], { duration: 230 });
-  const car = event.state.buses.find(bus => bus.id === event.id);
-  const full = car.load === car.capacity;
+  const car = trip.car;
+  const full = trip.load === car.capacity;
   const target = vehicle.getBoundingClientRect();
   const centerX = target.left + target.width / 2, centerY = target.top + 6;
   const badge = document.createElement('span');
@@ -146,49 +191,20 @@ function boardingFeedback(event, previous) {
     ], { duration: 480, easing: 'ease-out' });
   }
 }
-async function choose(id, keyboard = false) {
-  if (busy) return;
-  const result = dispatch(state, id);
-  if (!result.ok) {
-    if (result.reason === 'blocked') {
-      const car = state.buses.find(b => b.id === id);
-      announce(DIRECTIONS[car.dir].name + 'の進路に別の車がいるよ。先にその車を動かそう。', true);
-      const selected = document.querySelector('[data-bus="' + id + '"]');
-      selected?.classList.add('blocked-feedback');
-      for (const blocker of result.blockers) document.querySelector('[data-bus="' + blocker + '"]')?.classList.add('blocked-feedback');
-      setTimeout(() => document.querySelectorAll('.blocked-feedback').forEach(el => el.classList.remove('blocked-feedback')), 400);
-    }
-    return;
-  }
-  history.push(clone(state)); hintId = null; busy = true; render();
-  const selected = document.querySelector('[data-bus="' + id + '"]'), car = state.buses.find(b => b.id === id);
-  const vector = exitVector(car, state.size);
-  tone('move');
-  announce(COLORS[car.color].label + 'の車が、' + DIRECTIONS[car.dir].name + 'へ脱出！');
-  if (selected?.animate && !reduceMotion) {
-    await selected.animate([{ transform: 'translate(0px,0px)' }, { transform: 'translate(' + vector.x + 'px,' + vector.y + 'px)' }], { duration: 370, fill: 'forwards', easing: 'cubic-bezier(.4,0,.6,1)' }).finished.catch(() => {});
-  }
-  for (const event of result.events) {
-    const boarding = event.type === 'board' ? await animateRider(event) : null;
-    if (event.type === 'depart' && !reduceMotion) {
-      const vehicle = $('bays').querySelector('[data-bay="' + event.bay + '"] .bay-vehicle');
-      if (vehicle?.animate) await vehicle.animate([{ transform: 'translateY(0)' }, { transform: 'translateY(-70px)' }], { duration: 190, fill: 'forwards', easing: 'ease-in' }).finished.catch(() => {});
-    }
-    state = event.state; render();
-    if (event.type === 'move') {
-      $('bays').querySelector('[data-bay="' + event.bay + '"] .bay-vehicle')?.classList.add('arriving');
-      await delay(180);
-    }
-    if (event.type === 'board') {
-      tone('board'); boardingFeedback(event, boarding);
-      const boarded = event.state.buses.find(bus => bus.id === event.id);
-      await delay(boarded.load === boarded.capacity ? 160 : 45);
-    }
-    if (event.type === 'depart') {
-      tone('depart'); announce(COLORS[state.buses.find(b => b.id === event.id).color].label + 'の車が満員で出発！'); await delay(100);
-    }
-  }
-  state = result.state; busy = false; render();
+function exitArtwork(id) {
+  const source = $('garage').querySelector('[data-bus="' + id + '"]');
+  if (!source || reduceMotion || !source.animate) return null;
+  const rect = source.ownerSVGElement.getBoundingClientRect();
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 600 600'); svg.classList.add('exiting-car');
+  svg.style.cssText = 'left:' + rect.left + 'px;top:' + rect.top + 'px;width:' + rect.width + 'px;height:' + rect.height + 'px';
+  const car = source.cloneNode(true);
+  for (const attr of ['data-bus', 'tabindex', 'role', 'aria-disabled', 'aria-label']) car.removeAttribute(attr);
+  svg.append(car);
+  return { svg, car };
+}
+function finishRound(keyboard) {
+  if (game.active) return;
   if (status(state) === 'won') {
     cleared.add(state.stage);
     try { localStorage.setItem('bus-buddies-jam-cleared-v2', JSON.stringify([...cleared])); } catch {}
@@ -196,36 +212,93 @@ async function choose(id, keyboard = false) {
   } else if (status(state) === 'lost') showResult(false);
   else {
     announce('同じ色なら、列のどこからでも乗れるよ！ 進路の空いた車を探そう。');
-    if (keyboard) {
-      const target = state.buses.find(b => isAccessible(state, b.id));
-      if (target) document.querySelector('[data-bus="' + target.id + '"]')?.focus();
+    if (keyboard && document.activeElement === document.body) {
+      const target = state.buses.find(bus => isAccessible(state, bus.id));
+      if (target) $('garage').querySelector('[data-bus="' + target.id + '"]')?.focus();
     }
   }
 }
+async function playTrip(trip, artwork, keyboard) {
+  const round = game;
+  try {
+    if (artwork) {
+      $('boarding-effects').append(artwork.svg);
+      const vector = exitVector(trip.car, state.size);
+      await artwork.car.animate([{ transform: 'translate(0px,0px)' }, { transform: 'translate(' + vector.x + 'px,' + vector.y + 'px)' }], { duration: 370, easing: 'cubic-bezier(.4,0,.6,1)', fill: 'forwards' }).finished.catch(() => {});
+      artwork.svg.remove();
+    }
+    trip.phase = 'boarding'; render();
+    $('bays').querySelector('[data-bay="' + trip.bay + '"] .bay-vehicle')?.classList.add('arriving');
+    await delay(150);
+    for (const rider of trip.riders) {
+      const animated = await animateRider(trip, rider);
+      round.board(trip, rider.id); render(); tone('board');
+      if (animated) boardingFeedback(trip);
+      await delay(trip.load === trip.car.capacity ? 160 : 45);
+    }
+    trip.phase = 'departing'; render();
+    const vehicle = $('bays').querySelector('[data-bay="' + trip.bay + '"] .bay-vehicle');
+    if (!reduceMotion && vehicle?.animate) await vehicle.animate([{ transform: 'translateY(0)' }, { transform: 'translateY(-70px)' }], { duration: 190, easing: 'ease-in', fill: 'forwards' }).finished.catch(() => {});
+    tone('depart');
+  } catch (error) {
+    console.error('Could not animate boarding:', error);
+  } finally {
+    artwork?.svg.remove();
+    round.finish(trip);
+    if (game === round) {
+      render();
+      if (game.active) announce('乗り込み中も、ほかの車を続けて出せるよ！');
+      else finishRound(keyboard);
+    }
+  }
+}
+function choose(id, keyboard = false) {
+  const before = clone(state);
+  const artwork = exitArtwork(id);
+  const result = game.begin(id);
+  if (!result.ok) {
+    if (result.reason === 'blocked') {
+      const car = state.buses.find(bus => bus.id === id);
+      announce(DIRECTIONS[car.dir].name + 'の進路に別の車がいるよ。先にその車を動かそう。', true);
+      const selected = $('garage').querySelector('[data-bus="' + id + '"]');
+      selected?.classList.add('blocked-feedback');
+      for (const blocker of result.blockers) $('garage').querySelector('[data-bus="' + blocker + '"]')?.classList.add('blocked-feedback');
+      setTimeout(() => $('garage').querySelectorAll('.blocked-feedback').forEach(el => el.classList.remove('blocked-feedback')), 400);
+    } else if (result.reason === 'full') announce('のりばがいっぱい！ 乗り込みが終わると、次の車を出せるよ。', true);
+    return;
+  }
+  state = game.state; history.push(before); hintId = null; render();
+  const car = result.trip.car;
+  tone('move'); announce(COLORS[car.color].label + 'の車が、' + DIRECTIONS[car.dir].name + 'へ脱出！ ほかの車も続けて出せるよ。');
+  if (keyboard) {
+    const next = state.buses.find(bus => isAccessible(state, bus.id));
+    if (next) $('garage').querySelector('[data-bus="' + next.id + '"]')?.focus();
+  }
+  playTrip(result.trip, artwork, keyboard);
+}
+function resetSession(next) { game = new GameSession(next); state = game.state; parkingKey = ''; $('boarding-effects').replaceChildren(); }
 function closeDialogs() { for (const id of ['result-dialog', 'settings-dialog']) if ($(id).open) $(id).close(); }
 function start(index, variant = 0) {
-  if (busy) return;
-  closeDialogs(); state = createLevel(index, variant); history = []; hintId = null; render();
+  if (game.active) return;
+  closeDialogs(); resetSession(createLevel(index, variant)); history = []; hintId = null; render();
   announce('矢印の先が空いている車をタップ！ 同じ色の乗客がどこからでも乗ります。');
 }
 function undo() {
-  if (busy || !history.length) return;
-  closeDialogs(); state = history.pop(); hintId = null; render(); announce('1手戻しました。別の順番を試してみよう。');
+  if (game.active || !history.length) return;
+  closeDialogs(); resetSession(history.pop()); hintId = null; render(); announce('1手戻しました。別の順番を試してみよう。');
 }
 function expand() {
-  if (busy) return;
   const next = addBay(state);
   if (!next) return;
-  closeDialogs(); history.push(clone(state)); state = next; hintId = null; render();
+  closeDialogs(); history.push(clone(state)); game.state = next; state = next; hintId = null; render();
   announce('待機枠を1つ増やしました！ のりばに余裕ができたよ。');
 }
 function shuffle() {
-  if (busy) return;
-  history.push(clone(state)); state = createLevel(state.stage, state.variant + 1); hintId = null; render();
+  if (game.active) return;
+  history.push(clone(state)); resetSession(createLevel(state.stage, state.variant + 1)); hintId = null; render();
   announce('新しい配置にシャッフル！「1手戻す」で前の配置に戻せます。');
 }
 function hint() {
-  if (busy) return;
   const result = solve(state);
   if (result.status === 'solved' && result.path.length) {
     hintId = result.path[0]; render();

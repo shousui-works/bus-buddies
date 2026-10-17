@@ -1,6 +1,6 @@
 {
   "name": "bus-buddies",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "private": true,
   "type": "module",
   "description": "真上視点で進路を見分ける、カラフルな駐車場パズルゲーム",
@@ -10,6 +10,6 @@
   "scripts": {
     "dev": "node scripts/serve.mjs",
     "start": "node scripts/serve.mjs",
-    "test": "node --test tests/engine.test.mjs"
+    "test": "node --test tests/*.test.mjs"
   }
 }
