@@ -1,9 +1,9 @@
 {
   "name": "bus-buddies",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "色と順番を考えるバスのパズルゲーム",
+  "description": "4方向に詰まった車を脱出させる、立体的な駐車場パズルゲーム",
   "engines": {
     "node": ">=20"
   },

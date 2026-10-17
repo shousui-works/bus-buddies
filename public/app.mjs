@@ -1,47 +1,48 @@
-import { COLORS, STAGES, clone, createLevel, isAccessible, status, dispatch, solve } from './engine.mjs';
+import { COLORS, DIRECTIONS, STAGES, clone, createLevel, isAccessible, status, dispatch, solve, addBay } from './engine.mjs?v=2';
+import { parkingSVG, exitVector, carStyle, miniCar } from './renderer.mjs?v=2';
 const $ = id => document.getElementById(id);
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 let state = createLevel(0), history = [], busy = false, hintId = null, sound = false, audio;
 let cleared = new Set();
-try { const value = JSON.parse(localStorage.getItem('bus-buddies-cleared') || '[]'); if (Array.isArray(value)) cleared = new Set(value.filter(x => Number.isInteger(x) && x >= 0 && x < STAGES.length)); } catch {}
-function colorStyle(color) { const c = COLORS[color]; return '--paint:' + c.paint + ';--dark:' + c.dark + ';--pale:' + c.pale; }
-function busArt(bus) {
-  return '<span class="bus-figure" aria-hidden="true"><span class="bus-arrow">↑</span><span class="bus-window"></span><span class="bus-roof"><span class="bus-symbol">' + COLORS[bus.color].symbol + '</span></span><span class="bus-lights"></span></span>';
-}
-function riderArt(color, first) {
-  return '<div class="rider' + (first ? ' first' : '') + '" style="' + colorStyle(color) + '" role="img" aria-label="' + (first ? '先頭：' : '') + COLORS[color].name + 'の乗客"><span class="rider-body"></span><span class="rider-symbol">' + COLORS[color].symbol + '</span></div>';
-}
+try {
+  const saved = JSON.parse(localStorage.getItem('bus-buddies-jam-cleared-v2') || '[]');
+  if (Array.isArray(saved)) cleared = new Set(saved.filter(x => Number.isInteger(x) && x >= 0 && x < STAGES.length));
+} catch {}
 function announce(text, notice = false) { $('message').textContent = text; $('message').classList.toggle('notice', notice); }
+function riderArt(color, first) {
+  return '<div class="rider" style="' + carStyle(color) + '" role="img" aria-label="' + (first ? '先頭：' : '') + COLORS[color].name + 'の乗客"><span class="rider-body"></span><span class="rider-symbol">' + COLORS[color].symbol + '</span></div>';
+}
 function render() {
-  const spec = STAGES[state.stage];
-  $('stage-pill').textContent = 'STAGE ' + String(state.stage + 1).padStart(2, '0');
+  const spec = STAGES[state.stage], current = status(state);
+  $('level-label').textContent = 'LEVEL ' + String(state.stage + 1).padStart(2, '0');
   $('stage-title').textContent = spec.title;
-  $('stage-note').textContent = spec.note;
   $('boarded').textContent = state.head;
-  $('rider-total').textContent = ' / ' + state.queue.length + ' 人';
-  $('progress').style.width = (100 * state.head / state.queue.length) + '%';
-  const progress = document.querySelector('[role="progressbar"]');
-  progress.setAttribute('aria-valuenow', state.head); progress.setAttribute('aria-valuemax', state.queue.length);
+  $('rider-total').textContent = '/ ' + state.queue.length;
+  $('rider-total').parentElement.setAttribute('aria-label', state.queue.length + '人中' + state.head + '人が乗車');
   const remaining = state.queue.slice(state.head);
-  $('queue').innerHTML = remaining.length ? remaining.slice(0, 20).map((color, i) => riderArt(color, i === 0)).join('') : '<span class="queue-empty">✓ みんな乗れました！</span>';
-  $('bay-count').textContent = '待機中 ' + state.bays.filter(Boolean).length + ' / 3 台';
-  $('bays').innerHTML = state.bays.map((id, index) => {
-    const bus = state.buses.find(b => b.id === id);
-    if (!bus) return '<div class="bay"><span class="bay-number">0' + (index + 1) + '</span><span class="bay-empty" aria-hidden="true">+</span><small>あいています</small></div>';
-    return '<div class="bay occupied" style="' + colorStyle(bus.color) + '" aria-label="' + COLORS[bus.color].name + 'のバス ' + bus.load + '人乗車"><span class="bay-number">0' + (index + 1) + '</span>' + busArt(bus) + '<div class="seats">' + [0, 1, 2].map(i => '<span class="seat ' + (i < bus.load ? 'filled' : '') + '" aria-hidden="true"></span>').join('') + '<span class="seat-count">' + bus.load + ' / 3</span></div></div>';
+  $('queue').innerHTML = remaining.length ? remaining.slice(0, 26).map((color, i) => riderArt(color, i === 0)).join('') : '<span class="queue-done">みんな乗れました！</span>';
+  $('bay-count').textContent = '空き ' + state.bays.filter(id => !id).length + ' / ' + state.bays.length;
+  $('bays').innerHTML = Array.from({ length: 7 }, (_, i) => {
+    if (i >= state.bays.length) return '<button class="bay locked" data-expand aria-label="待機枠を1つ増やす（無料）"' + (busy || current === 'won' ? ' disabled' : '') + '><span class="plus" aria-hidden="true">＋</span><small>無料で追加</small></button>';
+    const id = state.bays[i], car = state.buses.find(b => b.id === id);
+    if (!car) return '<div class="bay empty" data-bay="' + i + '" aria-label="のりば' + (i + 1) + ' 空き"><span class="bay-number">0' + (i + 1) + '</span></div>';
+    return '<div class="bay occupied" data-bay="' + i + '" style="' + carStyle(car.color) + '" aria-label="のりば' + (i + 1) + ' ' + COLORS[car.color].name + 'の車 ' + car.load + '人 / 定員' + car.capacity + '人"><span class="bay-number">0' + (i + 1) + '</span><span class="bay-vehicle">' + miniCar(car) + '</span><span class="bay-load">' + car.load + ' / ' + car.capacity + '</span></div>';
   }).join('');
-  $('garage').style.setProperty('--cols', spec.cols);
-  $('garage').innerHTML = state.buses.map(bus => {
-    if (bus.location !== 'garage') return '<div class="parking-slot" aria-hidden="true"><span class="empty-parking">⌁</span></div>';
-    const accessible = isAccessible(state, bus.id);
-    const label = COLORS[bus.color].name + 'のバス（' + (bus.col + 1) + '列目・' + (bus.row + 1) + '台目）' + (!accessible ? '：手前のバスがふさいでいます' : '：のりばへ出す');
-    return '<div class="parking-slot"><button class="bus-button' + (accessible ? '' : ' blocked') + (hintId === bus.id ? ' hinted' : '') + '" style="' + colorStyle(bus.color) + '" data-bus="' + bus.id + '" aria-label="' + label + '" title="' + label + '"' + (busy ? ' disabled' : '') + '>' + busArt(bus) + '</button></div>';
-  }).join('');
-  $('stages').innerHTML = STAGES.map((stage, i) => '<button class="stage-choice' + (state.stage === i ? ' active' : '') + '" data-stage="' + i + '" aria-label="ステージ' + (i + 1) + ' ' + stage.title + (cleared.has(i) ? ' クリア済み' : '') + '" aria-current="' + (state.stage === i ? 'step' : 'false') + '"' + (busy ? ' disabled' : '') + '><span class="stage-no">' + (i + 1) + '</span><span><span class="stage-name">' + stage.title + '</span><span class="stage-difficulty">' + ['EASY', 'EASY +', 'NORMAL', 'HARD', 'CHALLENGE'][i] + '</span></span><span class="stage-check" aria-hidden="true">' + (cleared.has(i) ? '✓' : state.stage === i ? '•' : '') + '</span></button>').join('');
-  $('clear-count').textContent = 'クリアしたステージ ' + cleared.size + ' / 5';
+  $('car-count').textContent = 'のこり' + state.buses.filter(b => b.location === 'garage').length + '台';
+  $('garage').innerHTML = parkingSVG(state, hintId, busy);
+  if (busy) $('garage').setAttribute('aria-busy', 'true'); else $('garage').removeAttribute('aria-busy');
+  $('stages').innerHTML = STAGES.map((stage, i) => '<button class="stage-choice' + (i === state.stage ? ' active' : '') + '" data-stage="' + i + '" aria-label="ステージ' + (i + 1) + ' ' + stage.title + '"' + (busy ? ' disabled' : '') + '><span class="stage-number">' + (i + 1) + '</span><span>' + stage.title + '<br><small>' + stage.count + '台 / ' + stage.colors + '色</small></span><span class="stage-tick" aria-hidden="true">' + (cleared.has(i) ? '✓' : '') + '</span></button>').join('');
+  $('desktop-stages').innerHTML = STAGES.map((stage, i) => '<button class="desktop-stage' + (i === state.stage ? ' active' : '') + (cleared.has(i) ? ' cleared' : '') + '" data-stage="' + i + '" aria-label="ステージ' + (i + 1) + ' ' + stage.title + '" aria-current="' + (i === state.stage ? 'step' : 'false') + '"' + (busy ? ' disabled' : '') + '>' + (i + 1) + '</button>').join('');
+  $('clear-count').textContent = 'クリア ' + cleared.size + ' / ' + STAGES.length;
   $('undo').disabled = busy || !history.length;
-  $('hint').disabled = busy || status(state) !== 'playing';
+  $('hint').disabled = busy || current !== 'playing';
+  $('shuffle').disabled = busy;
+  $('expand').disabled = busy || state.bays.length >= 7 || current === 'won';
+  $('expand-note').textContent = state.bays.length < 7 ? 'あと' + (7 - state.bays.length) + '枠増やせる' : '7枠すべて使用中';
   $('restart').disabled = busy;
+  $('settings').disabled = busy;
+  $('help').disabled = busy;
+  $('level-menu').disabled = busy;
 }
 const delay = ms => new Promise(resolve => setTimeout(resolve, reduceMotion ? 0 : ms));
 function tone(type) {
@@ -52,9 +53,9 @@ function tone(type) {
     audio ||= new AudioCtx();
     if (audio.state === 'suspended') audio.resume().catch(() => {});
     const oscillator = audio.createOscillator(), gain = audio.createGain();
-    oscillator.type = 'sine'; oscillator.frequency.setValueAtTime(type === 'depart' ? 740 : type === 'board' ? 510 : 350, audio.currentTime);
-    gain.gain.setValueAtTime(.035, audio.currentTime); gain.gain.exponentialRampToValueAtTime(.001, audio.currentTime + .15);
-    oscillator.connect(gain); gain.connect(audio.destination); oscillator.start(); oscillator.stop(audio.currentTime + .16);
+    oscillator.type = 'sine'; oscillator.frequency.setValueAtTime(type === 'depart' ? 740 : type === 'board' ? 520 : 350, audio.currentTime);
+    gain.gain.setValueAtTime(.035, audio.currentTime); gain.gain.exponentialRampToValueAtTime(.001, audio.currentTime + .12);
+    oscillator.connect(gain); gain.connect(audio.destination); oscillator.start(); oscillator.stop(audio.currentTime + .13);
   } catch {}
 }
 async function choose(id, keyboard = false) {
@@ -62,92 +63,119 @@ async function choose(id, keyboard = false) {
   const result = dispatch(state, id);
   if (!result.ok) {
     if (result.reason === 'blocked') {
-      announce('このバスの前に別のバスがいるよ。手前から出してみよう。', true);
-      const el = document.querySelector('[data-bus="' + id + '"]'); el?.animate?.([{ transform: 'translateX(-3px)' }, { transform: 'translateX(3px)' }, { transform: 'translateX(0)' }], { duration: reduceMotion ? 0 : 160 });
+      const car = state.buses.find(b => b.id === id);
+      announce(DIRECTIONS[car.dir].name + 'の進路に別の車がいるよ。先にその車を動かそう。', true);
+      const selected = document.querySelector('[data-bus="' + id + '"]');
+      selected?.classList.add('blocked-feedback');
+      for (const blocker of result.blockers) document.querySelector('[data-bus="' + blocker + '"]')?.classList.add('blocked-feedback');
+      setTimeout(() => document.querySelectorAll('.blocked-feedback').forEach(el => el.classList.remove('blocked-feedback')), 400);
     }
     return;
   }
-  history.push(clone(state)); busy = true; hintId = null;
-  $('garage').setAttribute('aria-busy', 'true');
-  const originCol = state.buses.find(b => b.id === id).col;
-  for (const event of result.events) {
-    state = event.state; render();
-    const bay = $('bays').children[event.bay];
-    bay?.classList.add(event.type === 'move' ? 'arriving' : 'boarding');
-    tone(event.type);
-    if (event.type === 'move') announce(COLORS[state.buses.find(b => b.id === id).color].label + 'のバスが、のりばに到着。');
-    if (event.type === 'depart') announce(COLORS[state.buses.find(b => b.id === event.id).color].label + 'のバスが出発！ いってらっしゃい。');
-    await delay(event.type === 'move' ? 220 : event.type === 'depart' ? 200 : 120);
+  history.push(clone(state)); hintId = null; busy = true; render();
+  const selected = document.querySelector('[data-bus="' + id + '"]'), car = state.buses.find(b => b.id === id);
+  const vector = exitVector(car, state.size);
+  tone('move');
+  announce(COLORS[car.color].label + 'の車が、' + DIRECTIONS[car.dir].name + 'へ脱出！');
+  if (selected?.animate && !reduceMotion) {
+    await selected.animate([{ transform: 'translate(0px,0px)' }, { transform: 'translate(' + vector.x + 'px,' + vector.y + 'px)' }], { duration: 370, fill: 'forwards', easing: 'cubic-bezier(.4,0,.6,1)' }).finished.catch(() => {});
   }
-  state = result.state; busy = false; render(); $('garage').removeAttribute('aria-busy');
-  const currentStatus = status(state);
-  if (currentStatus === 'won') {
+  for (const event of result.events) {
+    if (event.type === 'depart' && !reduceMotion) {
+      const vehicle = $('bays').querySelector('[data-bay="' + event.bay + '"] .bay-vehicle');
+      if (vehicle?.animate) await vehicle.animate([{ transform: 'skewX(10deg) translateY(0)' }, { transform: 'skewX(10deg) translateY(-70px)' }], { duration: 190, fill: 'forwards', easing: 'ease-in' }).finished.catch(() => {});
+    }
+    state = event.state; render();
+    if (event.type === 'move') {
+      $('bays').querySelector('[data-bay="' + event.bay + '"] .bay-vehicle')?.classList.add('arriving');
+      await delay(180);
+    }
+    if (event.type === 'board') { tone('board'); await delay(65); }
+    if (event.type === 'depart') {
+      tone('depart'); announce(COLORS[state.buses.find(b => b.id === event.id).color].label + 'の車が満員で出発！'); await delay(100);
+    }
+  }
+  state = result.state; busy = false; render();
+  if (status(state) === 'won') {
     cleared.add(state.stage);
-    try { localStorage.setItem('bus-buddies-cleared', JSON.stringify([...cleared])); } catch {}
+    try { localStorage.setItem('bus-buddies-jam-cleared-v2', JSON.stringify([...cleared])); } catch {}
     render(); showResult(true); celebrate();
-  } else if (currentStatus === 'lost') {
-    showResult(false);
-  } else {
+  } else if (status(state) === 'lost') showResult(false);
+  else {
     const next = COLORS[state.queue[state.head]];
-    announce('つぎは' + next.label + ' ' + next.symbol + ' の乗客。どのバスを出そう？');
+    announce('つぎは' + next.label + ' ' + next.symbol + ' の乗客。進路の空いた車を探そう。');
     if (keyboard) {
-      const target = state.buses.find(b => isAccessible(state, b.id) && b.col === originCol) || state.buses.find(b => isAccessible(state, b.id));
+      const target = state.buses.find(b => isAccessible(state, b.id));
       if (target) document.querySelector('[data-bus="' + target.id + '"]')?.focus();
     }
   }
 }
-function start(index) {
+function closeDialogs() { for (const id of ['result-dialog', 'settings-dialog']) if ($(id).open) $(id).close(); }
+function start(index, variant = 0) {
   if (busy) return;
-  if ($('result-dialog').open) $('result-dialog').close();
-  state = createLevel(index); history = []; hintId = null; render();
-  announce(index === 0 ? '先頭の乗客と同じ色のバスを出してみよう。' : STAGES[index].note);
+  closeDialogs(); state = createLevel(index, variant); history = []; hintId = null; render();
+  announce('矢印の先が空いている車をタップ！ 先頭の色も見てみよう。');
 }
 function undo() {
   if (busy || !history.length) return;
-  if ($('result-dialog').open) $('result-dialog').close();
-  state = history.pop(); hintId = null; render(); announce('1手戻しました。別の順番を試してみよう。');
+  closeDialogs(); state = history.pop(); hintId = null; render(); announce('1手戻しました。別の順番を試してみよう。');
+}
+function expand() {
+  if (busy) return;
+  const next = addBay(state);
+  if (!next) return;
+  closeDialogs(); history.push(clone(state)); state = next; hintId = null; render();
+  announce('待機枠を1つ増やしました！ のりばに余裕ができたよ。');
+}
+function shuffle() {
+  if (busy) return;
+  history.push(clone(state)); state = createLevel(state.stage, state.variant + 1); hintId = null; render();
+  announce('新しい配置にシャッフル！「1手戻す」で前の配置に戻せます。');
 }
 function hint() {
   if (busy) return;
   const result = solve(state);
   if (result.status === 'solved' && result.path.length) {
     hintId = result.path[0]; render();
-    const c = COLORS[state.buses.find(b => b.id === hintId).color];
-    announce('光っている' + c.label + ' ' + c.symbol + ' のバスを出すと、クリアにつながるよ。');
+    const car = state.buses.find(b => b.id === hintId), color = COLORS[car.color];
+    announce('光っている' + color.label + 'の車を' + DIRECTIONS[car.dir].name + 'へ出そう！');
   } else if (result.status === 'unsolvable') {
-    announce('この順番ではクリアが難しそう。「1手戻す」で考え直してみよう。', true);
-    $('undo').focus();
-  } else {
-    announce('今はヒントを探しきれませんでした。先頭の色と奥のバスを見てみよう。');
-  }
+    announce('この順番では行き詰まりそう。「1手戻す」か「待機枠 +1」を使ってみよう。', true);
+  } else announce('ヒントを探しきれませんでした。1手戻すか、待機枠を増やしてみよう。', true);
 }
 function showResult(won) {
   const last = state.stage === STAGES.length - 1;
-  $('result-icon').textContent = won ? '🌼' : '🚌';
-  $('result-kicker').textContent = won ? 'NICE JOURNEY!' : 'TAKE A LITTLE BREATH.';
-  $('result-title').textContent = won ? last ? '5つの旅、ぜんぶクリア！' : 'みんな、いってらっしゃい！' : 'のりばがいっぱい！';
-  $('result-text').textContent = won ? state.queue.length + '人全員が乗車しました。' + (last ? 'おつかれさま。もう一度、好きなステージへ。' : 'つぎの街も、のぞいてみよう。') : '先頭の乗客が乗れるバスがいないみたい。順番を少し変えてみよう。';
-  $('result-primary').textContent = won ? last ? 'はじめから遊ぶ →' : '次のステージへ →' : '1手戻して続ける ↶';
-  $('result-secondary').textContent = won ? 'このステージをもう一度' : 'このステージをやり直す';
+  $('result-icon').textContent = won ? '🏁' : '🚧';
+  $('result-kicker').textContent = won ? 'ALL ABOARD!' : 'A LITTLE TRAFFIC JAM.';
+  $('result-title').textContent = won ? last ? 'すべての駐車場をクリア！' : 'みんな、出発！' : 'のりばがいっぱい！';
+  $('result-text').textContent = won ? state.queue.length + '人全員が乗車しました。' + (last ? '好きなステージをシャッフルして、もう一度遊べます。' : 'つぎの駐車場にも挑戦してみよう。') : '先頭の乗客が乗れる車がいないみたい。出す順番を変えてみよう。';
+  $('result-primary').textContent = won ? last ? 'はじめから遊ぶ' : '次のステージへ' : '1手戻して続ける';
+  $('result-secondary').textContent = won ? 'このステージをもう一度' : state.bays.length < 7 ? '待機枠を1つ増やして続ける' : 'このステージをやり直す';
   if (!$('result-dialog').open) $('result-dialog').showModal();
 }
 function celebrate() {
   if (reduceMotion) return;
-  const colors = ['#efc858', '#71b999', '#ef776e', '#b598da', '#66a7f2'];
-  for (let i = 0; i < 25; i++) {
-    const el = document.createElement('span'); el.className = 'confetti'; el.style.left = (5 + Math.random() * 90) + '%'; el.style.background = colors[i % colors.length]; el.style.animationDelay = (Math.random() * .7) + 's'; document.body.append(el); setTimeout(() => el.remove(), 3400);
+  const colors = Object.values(COLORS);
+  for (let i = 0; i < 24; i++) {
+    const el = document.createElement('span'); el.className = 'confetti'; el.style.left = (5 + Math.random() * 90) + '%'; el.style.background = colors[i % colors.length].paint; el.style.animationDelay = (Math.random() * .6) + 's'; document.body.append(el); setTimeout(() => el.remove(), 3200);
   }
 }
-$('garage').addEventListener('click', e => { const button = e.target.closest('[data-bus]'); if (button) choose(button.dataset.bus, e.detail === 0); });
-$('stages').addEventListener('click', e => { const button = e.target.closest('[data-stage]'); if (button) start(Number(button.dataset.stage)); });
+$('garage').addEventListener('click', event => { const car = event.target.closest('[data-bus]'); if (car) choose(car.dataset.bus, event.detail === 0); });
+$('garage').addEventListener('keydown', event => { if (!['Enter', ' '].includes(event.key)) return; const car = event.target.closest('[data-bus]'); if (car) { event.preventDefault(); choose(car.dataset.bus, true); } });
+document.addEventListener('click', event => { const stage = event.target.closest('[data-stage]'); if (stage) start(Number(stage.dataset.stage)); });
+$('bays').addEventListener('click', event => { if (event.target.closest('[data-expand]')) expand(); });
 $('undo').addEventListener('click', undo);
 $('hint').addEventListener('click', hint);
-$('restart').addEventListener('click', () => start(state.stage));
-$('sound').addEventListener('click', () => { sound = !sound; $('sound').setAttribute('aria-pressed', String(sound)); $('sound-label').textContent = sound ? '音 ON' : '音 OFF'; if (sound) tone('move'); });
+$('shuffle').addEventListener('click', shuffle);
+$('expand').addEventListener('click', expand);
+$('restart').addEventListener('click', () => start(state.stage, state.variant));
+$('sound').addEventListener('click', () => { sound = !sound; $('sound').setAttribute('aria-pressed', String(sound)); $('sound').setAttribute('aria-label', sound ? '音をオフにする' : '音をオンにする'); $('sound').textContent = sound ? '♪ ON' : '♪ OFF'; if (sound) tone('move'); });
+for (const id of ['settings', 'level-menu']) $(id).addEventListener('click', () => { if (!$('settings-dialog').open) $('settings-dialog').showModal(); });
+$('settings-close').addEventListener('click', () => $('settings-dialog').close());
 $('help').addEventListener('click', () => { if (!$('help-dialog').open) $('help-dialog').showModal(); });
 $('help-close').addEventListener('click', () => $('help-dialog').close());
 $('help-play').addEventListener('click', () => $('help-dialog').close());
 $('result-primary').addEventListener('click', () => { if (status(state) === 'won') start((state.stage + 1) % STAGES.length); else undo(); });
-$('result-secondary').addEventListener('click', () => start(state.stage));
-$('result-dialog').addEventListener('cancel', () => { announce(status(state) === 'won' ? 'クリア！ ステージを選んで、もう一度遊べます。' : '「1手戻す」か「やり直す」で続けよう。'); });
+$('result-secondary').addEventListener('click', () => { if (status(state) === 'lost' && state.bays.length < 7) expand(); else start(state.stage, state.variant); });
+$('result-dialog').addEventListener('cancel', () => announce(status(state) === 'won' ? 'クリア！ ステージを選んで、もう一度遊べます。' : '「1手戻す」か「待機枠 +1」で続けよう。'));
 render();
